@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestão de Boletos</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"
+    ></script>
+
+    <style>
+      body {
+        background-color: #f8f9fa;
+        padding: 0px;
+      }
+      .container {
+        max-width: 1200;
+      }
+      .navbar-nav .nav-link:hover {
+        color: rgba(0, 0, 0, 0.8);
+        transition: color 0.2s ease;
+      }
+    </style>
+  </head>
+  <body x-data="{ telaAtual: 'boletos' }">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+      <div class="container-fluid">
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#ConteudoNavbar"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="ConteudoNavbar">
+          <div class="navbar-nav">
+            <a
+              class="nav-link active"
+              href="#"
+              @click.prevent="telaAtual = 'inicio'"
+              ><i class="fa fa-home fa-fw me-2"></i>Início</a
+            >
+            <a
+              class="nav-link active"
+              href="#"
+              @click.prevent="telaAtual = 'boletos'"
+              ><i class="fas fa-receipt fa-fw me-2"></i>Boletos</a
+            >
+          </div>
+        </div>
+        <div class="d-flex align-items-center ms-auto">
+          <span class="text-white me-3 d-none d-md-block">
+            Ferreira Locações
+          </span>
+
+          <div class="dropdown">
+            <a
+              href="#"
+              class="d-flex align-items-center text-white text-decoration-none dropdown-toggle"
+              id="dropdownPerfil"
+              data-bs-toggle="dropdown"
+              aria-expanded="false"
+            >
+              <img
+                src="https://github.com/mdo.png"
+                alt="Foto de Perfil"
+                width="32"
+                height="32"
+                class="rounded-circle border border-white"
+              />
+            </a>
+
+            <ul
+              class="dropdown-menu dropdown-menu-end shadow"
+              aria-labelledby="dropdownPerfil"
+            >
+              <li><a class="dropdown-item" href="#">Meu Perfil</a></li>
+              <li><a class="dropdown-item" href="#">Configurações</a></li>
+              <li><hr class="dropdown-divider" /></li>
+              <li><a class="dropdown-item text-danger" href="#">Sair</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+      <div x-show="telaAtual === 'inicio'">
+        <h1>Bem-Vindo</h1>
+      </div>
+
+      <div x-show="telaAtual === 'boletos'" x-data="appBoletos()">
+        <h2 class="mb-4 border-bottom pb-2">Lançamento de Boleto</h2>
+        <form @submit.prevent="alert(JSON.stringify(novoBoleto))">
+          <h5 class="text-primary mb-3">
+            <i class="fas fa-dollar-sign"></i> Financeiro
+          </h5>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label fw-bold">Vencimento</label>
+              <input
+                type="date"
+                x-model="novoBoleto.vencimento"
+                class="form-control"
+                required
+              />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold">Valor Total</label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  x-model="novoBoleto.valor"
+                  class="form-control"
+                  required
+                />
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold">Juros</label>
+              <div class="input-group">
+                <select
+                  class="form-select"
+                  style="max-width: 70px; background-color: #e9ecef"
+                  x-model="novoBoleto.tipoJuros"
+                >
+                  <option value="R$">R$</option>
+                  <option value="%">%</option>
+                </select>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="form-control"
+                  x-model="novoBoleto.juros"
+                />
+              </div>
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label fw-bold">Multa</label>
+              <div class="input-group">
+                <span class="input-group-text">R$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  x-model="novoBoleto.multa"
+                  class="form-control"
+                />
+              </div>
+            </div>
+          </div>
+
+          <h5 class="text-primary mt-3 mb-3">
+            <i class="fas fa-info-circle"></i> Detalhes
+          </h5>
+          <div class="row g-3">
+            <div class="col md-3">
+              <label class="form-label fw-bold">Empresa / Cedente</label>
+              <input
+                type="text"
+                x-model="novoBoleto.empresa"
+                placeholder="Quem emitiu?"
+                class="form-control"
+              />
+            </div>
+
+            <div class="col-md-3">
+              <label class="form-label fw-bold">Categoria</label>
+              <input
+                class="form-control"
+                list="listaCategorias"
+                x-model="novoBoleto.categoria"
+                placeholder="Digite ou selecione..."
+              />
+              <datalist id="listaCategorias">
+                <template x-for="cat in categoriasSalvas">
+                  <option :value="cat"></option
+                ></template>
+              </datalist>
+            </div>
+
+            <div class="col-md-2">
+              <label class="form-label fw-bold">Placa</label>
+              <input
+                type="text"
+                class="form-control text-uppercase"
+                x-model="novoBoleto.placa"
+                placeholder="ABC-1234"
+                maxlength="8"
+              />
+            </div>
+
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Parcelamento</label>
+              <div class="input-group">
+                <select
+                  class="form-select bg-light"
+                  style="max-width: 150px; border-right: 0"
+                  x-model="modoParcelas"
+                >
+                  <option value="auto">Mensal</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+
+                <input
+                  type="number"
+                  class="form-control rounded-end"
+                  x-show="modoParcelas === 'auto'"
+                  x-model="novoBoleto.parcelas"
+                  min="1"
+                  placeholder="Qtd."
+                />
+
+                <input
+                  type="text"
+                  class="form-control rounded-end"
+                  x-show="modoParcelas === 'custom'"
+                  x-model="regraPersonalizada"
+                  @input="calcularQtdParcelas()"
+                  placeholder="Ex: 15/30/45"
+                />
+              </div>
+
+              <div class="form-text mt-1" x-show="modoParcelas === 'custom'">
+                <span x-text="novoBoleto.parcelas === 1 ? novoBoleto.parcelas + ' parcela identificada' : novoBoleto.parcelas + ' parcelas identificadas'"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3 mt-1">
+            <div class="col-12">
+              <label class="form-label fw-bold">Descrição / Observação</label>
+              <textarea
+                class="form-control"
+                rows="2"
+                x-model="novoBoleto.descricao"
+                placeholder="Ex.: Compra de 4 pneus novos Michelin..."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            <button
+              type="button"
+              class="btn btn-secondary me-md-2"
+              @click="telaAtual = 'boletos'"
+            >
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-success px-5">
+              Salvar Lançamento
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script>
+      function appBoletos() {
+        return {
+          modoParcelas: "auto",
+          regraPersonalizada: "",
+          novoBoleto: {
+            vencimento: "",
+            valor: "",
+            multa: 0,
+            juros: 0,
+            tipoJuros: "R$",
+            placa: "",
+            descricao: "",
+            empresa: "",
+            categoria: "",
+            parcelas: 1,
+          },
+          categoriasSalvas: ["Manutenção", "Combustível", "Impostos", "Peças"],
+
+          calcularQtdParcelas() {
+            // Armazena o texto digitado
+            let texto = this.regraPersonalizada;
+
+            // Não faz nada com texto vazio
+            if (!texto) return;
+
+            // Lista com cada dia digitado
+            let listaDeDias = texto.split("/");
+
+            // Filtra removendo espaços vazios
+            let quantidadeReal = listaDeDias.filter(
+              (dia) => dia.trim() !== "",
+            ).length;
+
+            // Atualiza o campo de parcelas
+            if (quantidadeReal > 0) {
+              this.novoBoleto.parcelas = quantidadeReal;
+            }
+          },
+
+          salvar() {
+            alert("Enviando " + this.novoBoleto.parcelas + " parcelas.");
+          },
+        };
+      }
+    </script>
+  </body>
+  <footer></footer>
+</html>
