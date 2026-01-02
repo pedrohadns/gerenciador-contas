@@ -30,9 +30,64 @@
         color: rgba(0, 0, 0, 0.8);
         transition: color 0.2s ease;
       }
+      /* Estilo "Netflix" */
+      .profile-card {
+        cursor: pointer;
+        transition: transform 0.2s; /* Animação suave */
+        text-align: center;
+        width: 150px;
+
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-start;
+      }
+      .profile-card:hover {
+        transform: scale(1.1); /* Aumenta 10% quando passa o mouse */
+      }
+      .profile-card:hover .profile-name {
+        color: #0d6efd;
+        font-weight: bold;
+      }
+      .profile-img {
+        width: 130px;
+        height: 130px;
+        object-fit: cover; /* Garante que a imagem não distorça */
+        border: 3px solid transparent;
+        border-radius: 10px; /* Bordas levemente arredondadas estilo Netflix */
+      }
+      .profile-card:hover .profile-img {
+        border-color: #0d6efd; /* Borda branca ao passar o mouse */
+      }
+      .profile-name {
+        margin-top: 10px;
+        color: #495057; /* Cinza claro */
+        font-size: 1.2rem;
+      }
+
+      /* Botão de Adicionar (+) */
+      .add-profile-btn {
+        width: 130px;
+        height: 130px;
+        border-radius: 50%; /* Redondo */
+        border: 2px dashed #adb5bd;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: #adb5bd;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .add-profile-btn:hover {
+        background-color: #e9ecef;
+        color: #0d6efd;
+        border-style: solid;
+        border-color: #0d6efd;
+      }
     </style>
   </head>
-  <body x-data="{ telaAtual: 'boletos' }">
+  <body x-data="appBoletos()">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
       <div class="container-fluid">
         <button
@@ -100,9 +155,94 @@
         <h1>Bem-Vindo</h1>
       </div>
 
-      <div x-show="telaAtual === 'boletos'" x-data="appBoletos()">
+      <div x-show="telaAtual === 'login'">
+        <div
+          class="d-flex flex-column justify-content-center align-items-center vh-100 bg-light text-dark"
+        >
+          <div x-show="!criandoPerfil" class="text-center">
+            <h1 class="mb-5">Quem está usando?</h1>
+
+            <div class="d-flex flex-wrap justify-content-center gap-4">
+              <template x-for="perfil in listaPerfis" :key="perfil.id">
+                <div class="profile-card" @click="entrar(perfil.id)">
+                  <img
+                    :src="perfil.foto ? perfil.foto : 'https://cdn-icons-png.flaticon.com/512/847/847969.png'"
+                    class="profile-img shadow"
+                  />
+                  <div class="profile-name" x-text="perfil.nome"></div>
+                </div>
+              </template>
+
+              <div class="profile-card" @click="criandoPerfil = true">
+                <div class="add-profile-btn">
+                  <i class="fas fa-plus"></i>
+                </div>
+                <div class="profile-name">Adicionar</div>
+              </div>
+            </div>
+          </div>
+          <div
+            x-show="criandoPerfil"
+            class="card bg-white border border-0 shadow p-4"
+            style="width: 400px"
+          >
+            <h3 class="text-center mb-4 text-primary">Novo Perfil</h3>
+
+            <form @submit.prevent="criarUsuario()">
+              <div class="text-center mb-4">
+                <img
+                  :src="novoUsuario.foto || 'https://cdn-icons-png.flaticon.com/512/847/847969.png'"
+                  class="rounded-circle border border-secondary"
+                  width="120"
+                  height="120"
+                  style="object-fit: cover"
+                />
+
+                <div class="mt-3">
+                  <label class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-camera me-2"></i> Escolher Foto
+                    <input
+                      type="file"
+                      accept="image/*"
+                      class="d-none"
+                      @change="converterImagem($event)"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div class="mb-4">
+                <label class="form-label text-muted">Nome do Perfil</label>
+                <input
+                  type="text"
+                  class="form-control form-control-lg bg-light"
+                  x-model="novoUsuario.nome"
+                  placeholder="Ex: Financeiro"
+                  required
+                  autofocus
+                />
+              </div>
+
+              <div class="d-flex justify-content-between">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary px-4"
+                  @click="criandoPerfil = false"
+                >
+                  Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary px-4">
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div x-show="telaAtual === 'boletos'">
         <h2 class="mb-4 border-bottom pb-2">Lançamento de Boleto</h2>
-        <form @submit.prevent="alert(JSON.stringify(novoBoleto))">
+        <form @submit.prevent="salvar()">
           <h5 class="text-primary mb-3">
             <i class="fas fa-dollar-sign"></i> Financeiro
           </h5>
@@ -238,7 +378,9 @@
               </div>
 
               <div class="form-text mt-1" x-show="modoParcelas === 'custom'">
-                <span x-text="novoBoleto.parcelas === 1 ? novoBoleto.parcelas + ' parcela identificada' : novoBoleto.parcelas + ' parcelas identificadas'"></span>
+                <span
+                  x-text="novoBoleto.parcelas === 1 ? novoBoleto.parcelas + ' parcela identificada' : novoBoleto.parcelas + ' parcelas identificadas'"
+                ></span>
               </div>
             </div>
           </div>
@@ -273,6 +415,21 @@
     <script>
       function appBoletos() {
         return {
+          init() {
+            window.addEventListener("pywebviewready", () => {
+              this.carregarPerfis();
+            });
+
+            if (window.pywebview) {
+              this.carregarPerfis();
+            }
+          },
+
+          telaAtual: "login",
+          usuario: null,
+          listaPerfis: [],
+          criandoPerfil: false,
+          novoUsuario: { nome: "", foto: "" },
           modoParcelas: "auto",
           regraPersonalizada: "",
           novoBoleto: {
@@ -288,6 +445,52 @@
             parcelas: 1,
           },
           categoriasSalvas: ["Manutenção", "Combustível", "Impostos", "Peças"],
+
+          async carregarPerfis() {
+            this.listaPerfis = await window.pywebview.api.listar_perfis();
+          },
+
+          async criarUsuario() {
+            if (!this.novoUsuario.nome) return;
+
+            try {
+              const resp = await window.pywebview.api.criar_perfil(
+                this.novoUsuario,
+              );
+
+              if (resp.status === "sucesso") {
+                this.novoUsuario = { nome: "", foto: "" };
+                this.criandoPerfil = false;
+                this.carregarPerfis();
+              } else {
+                alert(resp.msg);
+              }
+            } catch (e) {
+              console.error(e);
+              alert("Erro ao criar usuário");
+            }
+          },
+
+          async entrar(id) {
+            const resp = await window.pywebview.api.entrar_por_id(id);
+            if (resp.status === "sucesso") {
+              this.usuario = resp.usuario;
+              this.telaAtual = "inicio";
+            }
+          },
+
+          converterImagem(event) {
+            const arquivo = event.target.files[0];
+            if (arquivo) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                // O resultado é uma string gigante tipo "data:image/png;base64,iVBOR..."
+                // Guardamos isso na variável para mostrar o preview e enviar pro Python
+                this.novoUsuario.foto = e.target.result;
+              };
+              reader.readAsDataURL(arquivo);
+            }
+          },
 
           calcularQtdParcelas() {
             // Armazena o texto digitado
@@ -310,8 +513,27 @@
             }
           },
 
-          salvar() {
-            alert("Enviando " + this.novoBoleto.parcelas + " parcelas.");
+          async salvar() {
+            if (!this.novoBoleto.empresa || !this.novoBoleto.valor) {
+              alert("Preencha a empresa e o valor!");
+              return;
+            }
+
+            const pacoteDeDados = {
+              boleto: this.novoBoleto, // Dados do formulário
+              modo: this.modoParcelas, // 'auto' ou 'custom'
+              regra: this.regraPersonalizada, // '15/30/45'
+            };
+
+            const resposta =
+              await window.pywebview.api.salvar_lancamento(pacoteDeDados);
+
+            if (resposta.status === "sucesso") {
+              alert(resposta.msg);
+              this.telaAtual = "boletos";
+            } else {
+              alert("Erro: " + resposta.msg);
+            }
           },
         };
       }
