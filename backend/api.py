@@ -41,30 +41,9 @@ class BoletoAPI:
             return {'status': 'sucesso', 'usuario': self.usuario_atual}
         return {'status': 'erro', 'msg': 'Usuário não encontrado'}
 
-    # def entrar_perfil(self, nome_usuario):
-    #     """
-    #     Tenta achar o usuário, se não existir, cria um novo.
-    #     """
-    #     if not nome_usuario:
-    #         return { 'status': 'erro', 'msg': 'Digite um nome!' }
-    #     
-    #     conn = get_db_connection()
-    #
-    #     user = conn.execute("SELECT * FROM usuarios WHERE nome = ?", (nome_usuario,)).fetchone()
-    #
-    #     if not user:
-    #         cursor = conn.execute("INSERT INTO usuarios (nome) VALUES (?)", (nome_usuario,))
-    #         conn.commit()
-    #         user_id = cursor.lastrowid
-    #         user = conn.execute("SELECT * FROM usuarios WHERE id = ?", (user_id,)).fetchone()
-    #     conn.close()
-    #
-    #     self.usuario_atual = dict(user)
-    #     return { 'status': 'sucesso', 'usuario': self.usuario_atual }
-
     def logout(self):
         self.usuario_atual = None
-        return { 'status': 'ok' }
+        return { 'status': 'ok', 'usuario':{ 'nome': '', 'foto': 'https://cdn-icons-png.flaticon.com/512/847/847969.png' } }
 
     def salvar_lancamento(self, dados):
         """
@@ -108,7 +87,7 @@ class BoletoAPI:
                 conn.execute('''
                     INSERT INTO boletos (
                         usuario_id, empresa, categoria, placa, descricao,
-                        valor_original, juros, multa, valor_total,
+                        valor_original, juros, tipo_juros, multa, valor_total,
                         vencimento, numero_parcelas, total_parcelas
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
@@ -119,6 +98,7 @@ class BoletoAPI:
                     dados['boleto']['descricao'],
                     valor_por_parcela,
                     dados['boleto']['juros'],
+                    dados['boleto']['tipoJuros'],
                     dados['boleto']['multa'],
                     valor_por_parcela, # Aqui você pode somar juros/multa se quiser
                     data_venc.strftime('%Y-%m-%d'), # Converte data volta pra string
@@ -133,20 +113,8 @@ class BoletoAPI:
         except Exception as e:
             return { 'status': 'erro', 'msg': str(e) }
 
-    def listar_boletos(self):
-        if not self.usuario_atual:
-            return []
-
-        conn = get_db_connection()
-        boletos = conn.execute("SELECT * FROM boletos WHERE usuario_id = ? ORDER BY vencimento ASC, valor_total ASC", (self.usuario_atual['id'],)).fetchall()
-        conn.close()
-
-        return [dict(b) for b in boletos]
-
-
-    def calculaValorComJuros(self, dados):
-        boleto = dados['boleto']
-        tipo_juros = boleto['tipoJuros']
+    def calculaValorComJuros(self, boleto):
+        tipo_juros = boleto['tipo_Juros']
 
         # Tratamento das datas (ignora o horário)
         data_hoje = date.today()
@@ -174,3 +142,28 @@ class BoletoAPI:
 
         valor_atualizado = valor_original + valor_juros_total + valor_multa_input
         return round(valor_atualizado, 2)
+
+    def listar_boletos(self):
+        if not self.usuario_atual:
+            return []
+
+        conn = get_db_connection()
+        boletos_db = conn.execute("SELECT * FROM boletos WHERE usuario_id = ? ORDER BY vencimento ASC, valor_total ASC", (self.usuario_atual['id'],)).fetchall()
+        conn.close()
+
+        lista_processada = []
+
+        for b in boletos_db:
+            boleto = dict(b)
+            valor_final = boleto['valor_original']
+            if boleto['status'] == 'Pendente':
+                valor_final = self.calculaValorComJuros(boleto)
+
+            boleto['valor_atualizado'] = valor_final
+
+            data_venc = date.fromisoformat(boleto['vencimento'])
+            boleto['esta_vencido'] = (date.today() > data_venc and boleto['status'] == 'Pendente')
+
+            lista_processada.append(boleto)
+
+        return lista_processada

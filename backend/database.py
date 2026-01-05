@@ -31,6 +31,7 @@ def init_db():
 
                      valor_original REAL,
                      juros REAL,
+                     tipo_juros TEXT DEFAULT 'R$',
                      multa REAL,
                      valor_total REAL,
 
