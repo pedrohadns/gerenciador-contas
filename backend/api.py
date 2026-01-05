@@ -1,3 +1,6 @@
+import math
+import os
+import shutil
 from datetime import datetime, date, timedelta
 from backend.database import get_db_connection, init_db
 from sqlite3 import IntegrityError
@@ -6,6 +9,46 @@ class BoletoAPI:
     def __init__(self):
         init_db() # Garantir que a tabela exista quando o programa for aberto
         self.usuario_atual = None
+        try:
+            self.fazer_backup()
+        except Exception as e:
+            print(f"Alerta: Não foi possível fazer backup automático: {e}")
+
+    def fazer_backup(self):
+        # 1. Configurações
+        NOME_BANCO = 'sistema_boletos.db'
+        PASTA_BACKUP = 'backups'
+        
+        if not os.path.exists(PASTA_BACKUP):
+            os.makedirs(PASTA_BACKUP)
+        
+        # 2. Gera nome SÓ com a DATA (Sem hora) -> backup_2025-01-06.db
+        # Isso garante apenas 1 arquivo por dia
+        hoje = datetime.now().strftime('%Y-%m-%d')
+        nome_arquivo = f"backup_{hoje}.db"
+        caminho_destino = os.path.join(PASTA_BACKUP, nome_arquivo)
+        
+        msg = ""
+
+        # 3. Só faz o backup se ele AINDA NÃO EXISTIR hoje
+        if not os.path.exists(caminho_destino):
+            shutil.copy(NOME_BANCO, caminho_destino)
+            msg = f"Backup automático criado: {nome_arquivo}"
+            
+            # 4. ROTAÇÃO: Apaga os antigos para sobrar só 5
+            arquivos = sorted([
+                os.path.join(PASTA_BACKUP, f) 
+                for f in os.listdir(PASTA_BACKUP) 
+                if f.endswith('.db')
+            ], key=os.path.getmtime)
+
+            while len(arquivos) > 5:
+                arquivo_velho = arquivos.pop(0)
+                os.remove(arquivo_velho)
+        else:
+            msg = "Backup de hoje já existe."
+
+        return {'status': 'sucesso', 'msg': msg}
 
     def listar_perfis(self):
         """ Retorna todos os usuários cadastrados para a tela de seleção """
@@ -31,6 +74,36 @@ class BoletoAPI:
             conn.close()
             return {'status': 'erro', 'msg': 'Já existe um perfil com este nome.'}
 
+    def atualizar_perfil(self, dados):
+        if not dados.get('id'):
+            return {'status': 'erro', 'msg': 'ID do perfil não informado'}
+            
+        conn = get_db_connection()
+        try:
+            conn.execute("UPDATE usuarios SET nome = ?, foto = ? WHERE id = ?", 
+                         (dados['nome'], dados['foto'], dados['id']))
+            conn.commit()
+            conn.close()
+            return {'status': 'sucesso', 'msg': 'Perfil atualizado!'}
+        except Exception as e:
+            conn.close()
+            return {'status': 'erro', 'msg': str(e)}
+
+    def excluir_perfil(self, id_usuario):
+        conn = get_db_connection()
+        # Primeiro, verificamos se é o usuário atual para evitar crash
+        if self.usuario_atual and self.usuario_atual['id'] == id_usuario:
+            return {'status': 'erro', 'msg': 'Você não pode excluir o perfil que está logado!'}
+
+        # Opcional: Apagar boletos desse usuário também?
+        # Por segurança, vamos apagar o usuário e seus boletos (CASCADE manual)
+        # conn.execute("DELETE FROM boletos WHERE usuario_id = ?", (id_usuario,))
+        conn.execute("DELETE FROM usuarios WHERE id = ?", (id_usuario,))
+        
+        conn.commit()
+        conn.close()
+        return {'status': 'sucesso', 'msg': 'Perfil e dados excluídos.'}
+
     def entrar_por_id(self, id_usuario):
         conn = get_db_connection()
         user = conn.execute("SELECT * FROM usuarios WHERE id = ?", (id_usuario,)).fetchone()
@@ -50,7 +123,7 @@ class BoletoAPI:
         Recebe o objeto do Javascript e processa as parcelas
         """
         if not self.usuario_atual:
-            return { 'status': 'erro', 'msg': 'Você precisa estar logado!' }
+            return {'status': 'erro', 'msg': 'Não logado'}
         try:
             conn = get_db_connection()
 
@@ -88,8 +161,8 @@ class BoletoAPI:
                     INSERT INTO boletos (
                         usuario_id, empresa, categoria, placa, descricao,
                         valor_original, juros, tipo_juros, multa, valor_total,
-                        vencimento, numero_parcelas, total_parcelas
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        vencimento, numero_parcela, total_parcelas
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     self.usuario_atual['id'],
                     dados['boleto']['empresa'],
@@ -114,21 +187,26 @@ class BoletoAPI:
             return { 'status': 'erro', 'msg': str(e) }
 
     def calculaValorComJuros(self, boleto):
-        tipo_juros = boleto['tipo_Juros']
+        tipo_juros = boleto.get('tipo_juros', 'R$')
 
         # Tratamento das datas (ignora o horário)
         data_hoje = date.today()
-        data_vencimento = date.fromisoformat(boleto['vencimento'])
+        if isinstance(boleto['vencimento'], str):
+            data_vencimento = date.fromisoformat(boleto['vencimento'])
+        else:
+            data_vencimento = boleto['vencimento']
 
-        valor_original = float(boleto['valor'])
-        valor_juros_input = float(boleto['juros'])
-        valor_multa_input = float(boleto['multa'])
+        data_vencimento_util = self.proximo_dia_util(data_vencimento)
+
+        valor_original = float(boleto['valor_original'])
+        valor_juros_input = float(boleto['juros']) if boleto['juros'] else 0.0
+        valor_multa_input = float(boleto['multa']) if boleto['multa'] else 0.0
 
         # Retorna o valor original se a data de vencimento é anterior a atual
-        if data_hoje <= data_vencimento:
+        if data_hoje <= data_vencimento_util:
             return valor_original
 
-        dias_atraso = (data_hoje - data_vencimento).days
+        dias_atraso = (data_hoje - data_vencimento_util).days
 
         valor_juros_total = 0.0
 
@@ -143,27 +221,282 @@ class BoletoAPI:
         valor_atualizado = valor_original + valor_juros_total + valor_multa_input
         return round(valor_atualizado, 2)
 
-    def listar_boletos(self):
-        if not self.usuario_atual:
-            return []
+    def buscar_boletos(self, filtros, pagina=1, itens_por_pagina=30):
+        if not self.estaLogado():
+            return {'status': 'erro', 'msg': 'Login necessário'}
 
         conn = get_db_connection()
-        boletos_db = conn.execute("SELECT * FROM boletos WHERE usuario_id = ? ORDER BY vencimento ASC, valor_total ASC", (self.usuario_atual['id'],)).fetchall()
+        params = [self.usuario_atual['id']]
+        
+        # 1. Construção Dinâmica do SQL
+        sql_base = " FROM boletos WHERE usuario_id = ?"
+
+        if filtros.get('data_inicio'):
+            sql_base += " AND vencimento >= ?"
+            params.append(filtros['data_inicio'])
+        
+        if filtros.get('data_fim'):
+            sql_base += " AND vencimento <= ?"
+            params.append(filtros['data_fim'])
+
+        if filtros.get('status'):
+            sql_base += " AND status = ?"
+            params.append(filtros['status'])
+
+        if filtros.get('empresa'):
+            sql_base += " AND empresa LIKE ?"
+            params.append(f"%{filtros['empresa']}%")
+
+        if filtros.get('placa'):
+            sql_base += " AND placa LIKE ?" # LIKE permite buscar parcial
+            params.append(f"%{filtros['placa']}%")
+
+        if filtros.get('categoria'):
+            sql_base += " AND categoria = ?"
+            params.append(filtros['categoria'])
+
+        if filtros.get('data_pagamento'):
+            sql_base += " AND data_pagamento = ?"
+            params.append(filtros['data_pagamento'])
+
+        # 2. Paginação
+        total_itens = conn.execute(f"SELECT COUNT(*) {sql_base}", params).fetchone()[0]
+        total_paginas = math.ceil(total_itens / itens_por_pagina)
+        
+        offset = (pagina - 1) * itens_por_pagina
+        sql_final = f"""
+            SELECT * {sql_base} 
+            ORDER BY 
+                CASE 
+                    WHEN status = 'Pendente' AND vencimento < DATE('now', 'localtime') THEN 1 
+                    WHEN status = 'Pendente' THEN 2 
+                    ELSE 3 
+                END ASC,
+                vencimento ASC,
+                valor_original DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([itens_por_pagina, offset])
+        
+        boletos_db = conn.execute(sql_final, params).fetchall()
         conn.close()
 
+        # 3. Processamento (REUTILIZANDO SUA LÓGICA)
         lista_processada = []
+        hoje = date.today()
 
         for b in boletos_db:
             boleto = dict(b)
+            
+            # Garante que data é objeto Date
+            dt_vencimento = datetime.strptime(boleto['vencimento'], '%Y-%m-%d').date()
+
+            dt_limite = self.proximo_dia_util(dt_vencimento) # Data limite para não ser considerado atraso
+
             valor_final = boleto['valor_original']
-            if boleto['status'] == 'Pendente':
+            dias_atraso = 0
+            esta_vencido = False
+
+            if boleto['status'] == 'Pendente' and hoje > dt_limite:
+                dias_atraso = (hoje - dt_limite).days
+                esta_vencido = True
+                
+                # AQUI ESTÁ A MÁGICA: Reutilizamos sua função!
                 valor_final = self.calculaValorComJuros(boleto)
 
+            # Injeta dados extras para o HTML
             boleto['valor_atualizado'] = valor_final
-
-            data_venc = date.fromisoformat(boleto['vencimento'])
-            boleto['esta_vencido'] = (date.today() > data_venc and boleto['status'] == 'Pendente')
-
+            boleto['dias_atraso'] = dias_atraso
+            boleto['esta_vencido'] = esta_vencido
+            
             lista_processada.append(boleto)
 
-        return lista_processada
+        return {
+            'status': 'sucesso',
+            'dados': lista_processada,
+            'paginacao': {
+                'atual': pagina,
+                'total_paginas': total_paginas,
+                'total_itens': total_itens
+            }
+        }
+
+    def excluir_boleto(self, id_boleto):
+        if not self.estaLogado():
+            return {'status': 'erro', 'msg': 'Login necessário'}
+        
+        conn = get_db_connection()
+        # O filtro usuario_id garante que ninguém apague boleto dos outros
+        cursor = conn.execute("DELETE FROM boletos WHERE id = ? AND usuario_id = ?", 
+                              (id_boleto, self.usuario_atual['id']))
+        conn.commit()
+        rows = cursor.rowcount
+        conn.close()
+        
+        if rows > 0:
+            return {'status': 'sucesso', 'msg': 'Boleto excluído com sucesso!'}
+        return {'status': 'erro', 'msg': 'Boleto não encontrado.'}
+
+    def pagar_boleto(self, dados):
+        if not self.estaLogado():
+            return {'status': 'erro', 'msg': 'Login necessário'}
+        
+        conn = get_db_connection()
+        id_boleto = dados['id']
+        banco = dados['banco']
+        data_pagamento = dados['data']
+        valor_pago = float(dados['valor'])
+        
+        conn.execute('''
+            UPDATE boletos 
+            SET status = 'Pago', 
+                data_pagamento = ?, 
+                banco_pagamento = ?,
+                valor_total = ?
+            WHERE id = ? AND usuario_id = ?
+        ''', (data_pagamento, banco, valor_pago, id_boleto, self.usuario_atual['id']))
+        
+        conn.commit()
+        conn.close()
+        return {'status': 'sucesso', 'msg': 'Pagamento Registrado'}
+
+    def atualizar_boleto(self, dados):
+        if not self.estaLogado():
+            return {'status': 'erro', 'msg': 'Login necessário'}
+        
+        boleto = dados['boleto']
+        id_boleto = dados['id']
+        
+        try:
+            conn = get_db_connection()
+            # Convertendo a data para ISO
+            data_venc = datetime.strptime(boleto['vencimento'], '%Y-%m-%d').date()
+            
+            conn.execute('''
+                UPDATE boletos SET
+                    empresa = ?, categoria = ?, placa = ?, descricao = ?,
+                    vencimento = ?, valor_original = ?, 
+                    juros = ?, multa = ?, tipo_juros = ?
+                WHERE id = ? AND usuario_id = ?
+            ''', (
+                boleto['empresa'], boleto['categoria'], boleto['placa'], boleto['descricao'],
+                data_venc, float(boleto['valor']), 
+                float(boleto['juros'] or 0), float(boleto['multa'] or 0), boleto['tipoJuros'],
+                id_boleto, self.usuario_atual['id']
+            ))
+            
+            conn.commit()
+            conn.close()
+            return {'status': 'sucesso', 'msg': 'Boleto atualizado!'}
+        except Exception as e:
+            return {'status': 'erro', 'msg': str(e)}
+
+    def estaLogado(self):
+        if not self.usuario_atual: return False
+        return True
+
+    def proximo_dia_util(self, data_vencimento):
+        """
+        Recebe um objeto date e retorna o próximo dia útil,
+        pulando Sábados, Domingos e Feriados de Nova Venécia/ES (2026).
+        """
+        # Lista de Feriados 2026 - Nova Venécia/ES (Formato YYYY-MM-DD)
+        feriados = {
+            '2026-01-01', # Confraternização Universal
+            '2026-01-26', # Aniversário de Nova Venécia
+            '2026-02-16', # Carnaval
+            '2026-02-17', # Carnaval
+            '2026-02-18', # Quarta-feira de Cinzas
+            '2026-04-03', # Sexta-feira da Paixão
+            '2026-04-05', # Páscoa
+            '2026-04-13', # N. Sra. da Penha (Estadual)
+            '2026-04-21', # Tiradentes
+            '2026-04-24', # São Marcos (Municipal)
+            '2026-05-01', # Dia do Trabalho
+            '2026-05-23', # Colonização (Estadual)
+            '2026-06-04', # Corpus Christi
+            '2026-09-07', # Independência
+            '2026-10-12', # N. Sra. Aparecida
+            '2026-11-02', # Finados
+            '2026-11-15', # Proclamação da República
+            '2026-11-20', # Consciência Negra
+            '2026-12-25', # Natal
+        }
+
+        dia_analise = data_vencimento
+
+        # Loop infinito até achar um dia útil
+        while True:
+            dia_semana = dia_analise.weekday() # 0=Seg, 5=Sab, 6=Dom
+            str_data = dia_analise.strftime('%Y-%m-%d')
+
+            # Se for Sábado (5), Domingo (6) OU estiver na lista de feriados
+            if dia_semana >= 5 or str_data in feriados:
+                # Pula para o próximo dia e repete a verificação
+                dia_analise += timedelta(days=1)
+            else:
+                # É um dia útil!
+                return dia_analise
+
+    def obter_resumo_dashboard(self):
+            if not self.usuario_atual:
+                return {'status': 'erro', 'msg': 'Não logado'}
+
+            conn = get_db_connection()
+            user_id = self.usuario_atual['id']
+            hoje = date.today()
+            
+            # 1. Definição das Datas Limite (Semana e Mês)
+            # Semana (Domingo a Sábado)
+            # Se hoje é Domingo (6), volta 0 dias. Se é Segunda (0), volta 1 dia...
+            inicio_semana = hoje - timedelta(days=hoje.weekday() + 1) if hoje.weekday() != 6 else hoje
+            fim_semana = inicio_semana + timedelta(days=6)
+            
+            # Mês (Primeiro e Último dia)
+            inicio_mes = date(hoje.year, hoje.month, 1)
+            proximo_mes = hoje.replace(day=28) + timedelta(days=4)
+            fim_mes = proximo_mes - timedelta(days=proximo_mes.day)
+
+            # 2. Estrutura do Resumo
+            resumo = {
+                'hoje': {'qtd': 0, 'valor': 0, 'inicio': hoje.strftime('%Y-%m-%d'), 'fim': hoje.strftime('%Y-%m-%d')},
+                'vencidos': {'qtd': 0, 'valor': 0, 'inicio': '...', 'fim': (hoje - timedelta(days=1)).strftime('%Y-%m-%d')},
+                'semana': {'qtd': 0, 'valor': 0, 'inicio': inicio_semana.strftime('%Y-%m-%d'), 'fim': fim_semana.strftime('%Y-%m-%d')},
+                'mes': {'qtd': 0, 'valor': 0, 'inicio': inicio_mes.strftime('%Y-%m-%d'), 'fim': fim_mes.strftime('%Y-%m-%d')}
+            }
+
+            # 3. Busca TODOS os Pendentes e filtra no Python (para usar a lógica de feriados)
+            # Trazemos apenas o necessário para ser rápido
+            boletos_db = conn.execute("SELECT vencimento, valor_original FROM boletos WHERE usuario_id = ? AND status = 'Pendente'", (user_id,)).fetchall()
+            conn.close()
+
+            for b in boletos_db:
+                valor = float(b['valor_original'])
+                
+                # --- O GRANDE SEGREDO ---
+                # Pegamos a data original e "empurramos" se cair em feriado/FDS
+                dt_original = datetime.strptime(b['vencimento'], '%Y-%m-%d').date()
+                dt_util = self.proximo_dia_util(dt_original) 
+                # ------------------------
+
+                # A. Verifica HOJE
+                if dt_util == hoje:
+                    resumo['hoje']['qtd'] += 1
+                    resumo['hoje']['valor'] += valor
+
+                # B. Verifica VENCIDOS (Só é vencido se a data ÚTIL já passou)
+                if dt_util < hoje:
+                    resumo['vencidos']['qtd'] += 1
+                    resumo['vencidos']['valor'] += valor
+                
+                # C. Verifica SEMANA (Considera a data útil para o fluxo de caixa)
+                if inicio_semana <= dt_util <= fim_semana:
+                    resumo['semana']['qtd'] += 1
+                    resumo['semana']['valor'] += valor
+
+                # D. Verifica MÊS
+                if inicio_mes <= dt_util <= fim_mes:
+                    resumo['mes']['qtd'] += 1
+                    resumo['mes']['valor'] += valor
+
+            return {'status': 'sucesso', 'dados': resumo}

@@ -38,7 +38,7 @@ def init_db():
                      data_pagamento TEXT,
                      banco_pagamento TEXT,
 
-                     numero_parcelas INTEGER,
+                     numero_parcela INTEGER,
                      total_parcelas INTEGER,
 
                      FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
