@@ -16,12 +16,11 @@ def resource_path(relative_path):
 if __name__ == '__main__':
     api = BoletoAPI()
 
-    arquivo_html = resource_path('frontend/index.html')
-    url = f'file://{arquivo_html}'
+    arquivo_html = resource_path('index.html')
 
     window = webview.create_window(
             'Gestão',
-            url=url,
+            url=arquivo_html,
             js_api=api,
             width=1200, height=800
             )
