@@ -85,6 +85,58 @@
         border-style: solid;
         border-color: #0d6efd;
       }
+
+      .dashboard-card {
+        border-radius: 25px; /* Bordas bem redondas como no desenho */
+        border: 3px solid #333; /* Borda preta estilo cartoon/sketch */
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        position: relative;
+        box-shadow: 4px 4px 0px #333; /* Sombra sólida estilo cartoon */
+        min-height: 160px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .dashboard-card:hover {
+        transform: translate(-2px, -2px); /* Efeito de clique invertido */
+        box-shadow: 6px 6px 0px #333;
+      }
+
+      .card-blue {
+        background-color: #90caf9;
+      } /* Azul - Hoje */
+      .card-red {
+        background-color: #ef9a9a;
+      } /* Vermelho - Vencidos */
+      .card-yellow {
+        background-color: #fff59d;
+      } /* Amarelo - Semana */
+      .card-green {
+        background-color: #a5d6a7;
+      } /* Verde - Mês */
+
+      .dash-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #000;
+      }
+      .dash-count {
+        font-size: 1.1rem;
+        color: #333;
+        margin-top: 5px;
+      }
+      .dash-title {
+        font-size: 1.2rem;
+        margin-bottom: 10px;
+        font-weight: 600;
+        /* Fonte estilo "escrita a mão" ficaria legal aqui, mas vamos usar a padrão */
+      }
     </style>
   </head>
   <body x-data="appBoletos()">
@@ -142,7 +194,14 @@
               class="dropdown-menu dropdown-menu-end shadow"
               aria-labelledby="dropdownPerfil"
             >
-              <li><a class="dropdown-item" href="#" @click.prevent="telaAtual = 'login'">Trocar usuário</a></li>
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="#"
+                  @click.prevent="telaAtual = 'login'"
+                  >Trocar usuário</a
+                >
+              </li>
               <li><hr class="dropdown-divider" /></li>
               <li>
                 <a
@@ -160,7 +219,88 @@
 
     <div class="container-fluid mt-4">
       <div x-show="telaAtual === 'inicio'">
-        <h1>Bem-Vindo</h1>
+        <div class="text-center mb-5 mt-3">
+          <h2 class="fw-bold text-secondary">
+            Olá, <span x-text="usuario.nome"></span>!
+          </h2>
+          <p
+            class="text-muted"
+            x-text="'Hoje é ' + new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })"
+          ></p>
+        </div>
+
+        <div class="row justify-content-center mb-5">
+          <div class="col-md-4">
+            <div
+              class="dashboard-card card-blue"
+              @click="irParaFiltro('hoje')"
+              :title="'Considerando data: ' + formatarData(resumo.hoje.inicio)"
+            >
+              <div class="dash-title">Contas de Hoje</div>
+              <div
+                class="dash-value"
+                x-text="formatarMoeda(resumo.hoje.valor)"
+              ></div>
+              <div
+                class="dash-count"
+                x-text="resumo.hoje.qtd + ' conta(s)'"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-4">
+          <div class="col-md-4">
+            <div
+              class="dashboard-card card-red"
+              @click="irParaFiltro('vencidos')"
+              title="Contas pendentes com vencimento anterior a hoje"
+            >
+              <div class="dash-title">Contas Vencidas</div>
+              <div
+                class="dash-value"
+                x-text="formatarMoeda(resumo.vencidos.valor)"
+              ></div>
+              <div
+                class="dash-count"
+                x-text="resumo.vencidos.qtd + ' conta(s)'"
+              ></div>
+            </div>
+          </div>
+
+          <div class="col-md-4">
+            <div
+              class="dashboard-card card-yellow"
+              @click="irParaFiltro('semana')"
+              :title="'De ' + formatarData(resumo.semana.inicio) + ' até ' + formatarData(resumo.semana.fim)"
+            >
+              <div class="dash-title">Contas da Semana</div>
+              <div
+                class="dash-value"
+                x-text="formatarMoeda(resumo.semana.valor)"
+              ></div>
+              <div
+                class="dash-count"
+                x-text="resumo.semana.qtd + ' conta(s)'"
+              ></div>
+            </div>
+          </div>
+
+          <div class="col-md-4">
+            <div
+              class="dashboard-card card-green"
+              @click="irParaFiltro('mes')"
+              :title="'Referente ao mês de ' + new Date().toLocaleDateString('pt-BR', { month: 'long' })"
+            >
+              <div class="dash-title">Contas do Mês</div>
+              <div
+                class="dash-value"
+                x-text="formatarMoeda(resumo.mes.valor)"
+              ></div>
+              <div class="dash-count" x-text="resumo.mes.qtd + ' conta(s)'"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div x-show="telaAtual === 'login'">
@@ -170,18 +310,66 @@
           <div x-show="!criandoPerfil" class="text-center">
             <h1 class="mb-5">Quem está usando?</h1>
 
+            <div class="mb-4">
+              <button
+                class="btn btn-sm"
+                :class="modoGerenciarPerfis ? 'btn-outline-danger' : 'btn-outline-secondary'"
+                @click="modoGerenciarPerfis = !modoGerenciarPerfis"
+              >
+                <i
+                  class="fas"
+                  :class="modoGerenciarPerfis ? 'fa-times' : 'fa-cog'"
+                ></i>
+                <span
+                  x-text="modoGerenciarPerfis ? 'Cancelar Gerenciamento' : 'Gerenciar Perfis'"
+                ></span>
+              </button>
+            </div>
+
             <div class="d-flex flex-wrap justify-content-center gap-4">
               <template x-for="perfil in listaPerfis" :key="perfil.id">
-                <div class="profile-card" @click="entrar(perfil.id)">
+                <div
+                  class="profile-card position-relative"
+                  @click="!modoGerenciarPerfis ? entrar(perfil.id) : null"
+                >
                   <img
                     :src="perfil.foto ? perfil.foto : 'https://cdn-icons-png.flaticon.com/512/847/847969.png'"
                     class="profile-img shadow"
+                    :style="modoGerenciarPerfis ? 'opacity: 0.6;' : ''"
                   />
+
                   <div class="profile-name" x-text="perfil.nome"></div>
+
+                  <div x-show="modoGerenciarPerfis">
+                    <div
+                      class="position-absolute top-50 start-50 translate-middle d-flex gap-2"
+                      style="z-index: 10"
+                    >
+                      <button
+                        class="btn btn-primary rounded-circle shadow"
+                        style="width: 40px; height: 40px"
+                        @click.stop="prepararEdicaoPerfil(perfil)"
+                      >
+                        <i class="fas fa-pencil-alt"></i>
+                      </button>
+
+                      <button
+                        class="btn btn-danger rounded-circle shadow"
+                        style="width: 40px; height: 40px"
+                        @click.stop="deletarPerfil(perfil.id)"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </template>
 
-              <div class="profile-card" @click="criandoPerfil = true">
+              <div
+                class="profile-card"
+                @click="criandoPerfil = true; editandoPerfilId = null; novoUsuario={nome:'', foto:''}"
+                x-show="!modoGerenciarPerfis"
+              >
                 <div class="add-profile-btn">
                   <i class="fas fa-plus"></i>
                 </div>
@@ -194,7 +382,10 @@
             class="card bg-white border border-0 shadow p-4"
             style="width: 400px"
           >
-            <h3 class="text-center mb-4 text-primary">Novo Perfil</h3>
+            <h3
+              class="text-center mb-4 text-primary"
+              x-text="editandoPerfilId ? 'Editar Perfil' : 'Novo Perfil'"
+            ></h3>
 
             <form @submit.prevent="criarUsuario()">
               <div class="text-center mb-4">
@@ -235,7 +426,7 @@
                 <button
                   type="button"
                   class="btn btn-outline-secondary px-4"
-                  @click="criandoPerfil = false"
+                  @click="cancelarCriacaoPerfil()"
                 >
                   Cancelar
                 </button>
@@ -249,7 +440,11 @@
       </div>
 
       <div x-show="telaAtual === 'boletos'">
-        <h2 class="mb-4 border-bottom pb-2">Lançamento de Boleto</h2>
+        <h2 class="mb-4 border-bottom pb-2">
+          <span
+            x-text="idEdicao ? 'Editando Boleto #' + idEdicao : 'Lançamento de Boleto'"
+          ></span>
+        </h2>
         <form @submit.prevent="salvar()">
           <h5 class="text-primary mb-3">
             <i class="fas fa-dollar-sign"></i> Financeiro
@@ -269,10 +464,10 @@
               <div class="input-group">
                 <span class="input-group-text">R$</span>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  x-model="novoBoleto.valor"
+                  type="text"
+                  placeholder="0,00"
+                  :value="novoBoleto.valor"
+                  @input="novoBoleto.valor = mascaraMoeda($event.target.value)"
                   class="form-control"
                   required
                 />
@@ -290,11 +485,11 @@
                   <option value="%">%</option>
                 </select>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
                   class="form-control"
-                  x-model="novoBoleto.juros"
+                  placeholder="0,00"
+                  :value="novoBoleto.juros"
+                  @input="novoBoleto.juros = mascaraMoeda($event.target.value)"
                 />
               </div>
             </div>
@@ -304,11 +499,11 @@
               <div class="input-group">
                 <span class="input-group-text">R$</span>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  x-model="novoBoleto.multa"
+                  type="text"
                   class="form-control"
+                  placeholder="0,00"
+                  :value="novoBoleto.multa"
+                  @input="novoBoleto.multa = mascaraMoeda($event.target.value)"
                 />
               </div>
             </div>
@@ -347,14 +542,15 @@
               <label class="form-label fw-bold">Placa</label>
               <input
                 type="text"
-                class="form-control text-uppercase"
-                x-model="novoBoleto.placa"
+                class="form-control"
                 placeholder="ABC-1234"
+                :value="novoBoleto.placa"
+                @input="novoBoleto.placa = mascaraPlaca($event.target.value)"
                 maxlength="8"
               />
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-4" x-show="!idEdicao">
               <label class="form-label fw-bold">Parcelamento</label>
               <div class="input-group">
                 <select
@@ -409,15 +605,431 @@
             <button
               type="button"
               class="btn btn-secondary me-md-2"
-              @click="telaAtual = 'boletos'"
+              @click="cancelarEdicao()"
             >
               Cancelar
             </button>
-            <button type="submit" class="btn btn-success px-5">
-              Salvar Lançamento
-            </button>
+            <button
+              type="submit"
+              class="btn btn-success px-5"
+              :class="idEdicao ? 'btn-primary' : 'btn-success'"
+              x-text="idEdicao ? 'Salvar Alterações' : 'Salvar Lançamento'"
+            ></button>
           </div>
         </form>
+        <hr class="my-5 border-2" />
+
+        <div class="card shadow-sm mb-5">
+          <div class="card-header bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <h4 class="mb-0 text-primary">
+                <i class="fas fa-list"></i> Meus Boletos
+              </h4>
+              <span
+                class="badge bg-secondary"
+                x-text="paginacao.total_itens + ' encontrados'"
+              ></span>
+            </div>
+
+            <div class="row g-2 align-items-end">
+              <div class="col-md-3">
+                <label class="small text-muted">Início</label>
+                <input
+                  type="date"
+                  class="form-control form-control-sm"
+                  x-model="filtros.data_inicio"
+                />
+              </div>
+              <div class="col-md-3">
+                <label class="small text-muted">Fim</label>
+                <input
+                  type="date"
+                  class="form-control form-control-sm"
+                  x-model="filtros.data_fim"
+                />
+              </div>
+              <div class="col-md-2">
+                <label class="small text-muted">Status</label>
+                <select
+                  class="form-select form-select-sm"
+                  x-model="filtros.status"
+                >
+                  <option value="">Todos</option>
+                  <option value="Pendente">Pendente</option>
+                  <option value="Pago">Pago</option>
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="small text-muted">Empresa</label>
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  x-model="filtros.empresa"
+                  placeholder="Nome..."
+                />
+              </div>
+
+              <div class="col-md-2">
+                <label class="small text-muted">Placa</label>
+                <input
+                  type="text"
+                  class="form-control form-control-sm text-uppercase"
+                  x-model="filtros.placa"
+                  placeholder="ABC..."
+                />
+              </div>
+
+              <div class="col-md-3">
+                <label class="small text-muted">Categoria</label>
+                <select
+                  class="form-select form-select-sm"
+                  x-model="filtros.categoria"
+                >
+                  <option value="">Todas</option>
+                  <template x-for="cat in categoriasSalvas">
+                    <option :value="cat" x-text="cat"></option>
+                  </template>
+                </select>
+              </div>
+
+              <div class="col-md-2">
+                <label class="small text-muted">Data Pagto.</label>
+                <input
+                  type="date"
+                  class="form-control form-control-sm"
+                  x-model="filtros.data_pagamento"
+                />
+              </div>
+
+              <div class="col d-grid">
+                <button
+                  class="btn btn-primary btn-sm"
+                  @click="carregarBoletos(1)"
+                >
+                  <i class="fas fa-filter"></i> Filtrar
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-2 border-top pt-2">
+              <small class="text-muted me-2">Filtro Rápido:</small>
+
+              <a
+                href="#"
+                @click.prevent="aplicarFiltroDiario()"
+                class="badge bg-info text-white text-decoration-none border me-1"
+                >Hoje</a
+              >
+
+              <a
+                href="#"
+                @click.prevent="aplicarFiltroSemanal()"
+                class="badge bg-light text-dark text-decoration-none border me-1"
+                >Esta Semana</a
+              >
+              <a
+                href="#"
+                @click.prevent="aplicarFiltroMensal()"
+                class="badge bg-light text-dark text-decoration-none border me-1"
+                >Este Mês</a
+              >
+              <a
+                href="#"
+                @click.prevent="limparFiltros()"
+                class="badge bg-light text-danger text-decoration-none border"
+                >Limpar Tudo</a
+              >
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Vencimento</th>
+                  <th>Empresa / Descrição</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                  <th class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="boleto in listaBoletos" :key="boleto.id">
+                  <tr :class="boleto.esta_vencido ? 'table-danger' : ''">
+                    <td>
+                      <div
+                        class="fw-bold"
+                        x-text="formatarData(boleto.vencimento)"
+                      ></div>
+                      <small
+                        class="text-muted"
+                        x-text="boleto.parcela_formatada"
+                      ></small>
+                    </td>
+
+                    <td>
+                      <div class="fw-bold" x-text="boleto.empresa"></div>
+                      <div
+                        class="small text-muted text-truncate"
+                        style="max-width: 200px"
+                        x-text="boleto.descricao"
+                      ></div>
+                      <span
+                        class="badge bg-light text-dark border"
+                        x-text="boleto.placa"
+                        x-show="boleto.placa"
+                      ></span>
+                      <span
+                        class="badge bg-light text-dark border"
+                        x-text="boleto.categoria"
+                      ></span>
+                    </td>
+
+                    <td>
+                      <template x-if="boleto.status === 'Pago'">
+                        <div class="fw-bold text-success">
+                          <span
+                            x-text="formatarMoeda(boleto.valor_total)"
+                          ></span>
+                        </div>
+                      </template>
+
+                      <template
+                        x-if="boleto.status === 'Pendente' && boleto.esta_vencido"
+                      >
+                        <div>
+                          <small
+                            class="text-decoration-line-through text-muted"
+                            x-text="formatarMoeda(boleto.valor_original)"
+                          ></small>
+                          <div
+                            class="fw-bold text-danger"
+                            x-text="formatarMoeda(boleto.valor_atualizado)"
+                          ></div>
+                          <small class="text-danger" style="font-size: 0.7em">
+                            + Juros (<span x-text="boleto.dias_atraso"></span>
+                            dias)
+                          </small>
+                        </div>
+                      </template>
+
+                      <template
+                        x-if="boleto.status === 'Pendente' && !boleto.esta_vencido"
+                      >
+                        <div
+                          class="fw-bold text-dark"
+                          x-text="formatarMoeda(boleto.valor_original)"
+                        ></div>
+                      </template>
+                    </td>
+
+                    <td>
+                      <template x-if="boleto.status === 'Pendente'">
+                        <span
+                          class="badge"
+                          :class="boleto.esta_vencido ? 'bg-danger' : 'bg-warning text-dark'"
+                          x-text="boleto.esta_vencido ? 'Vencido' : 'Pendente'"
+                        >
+                        </span>
+                      </template>
+
+                      <template x-if="boleto.status === 'Pago'">
+                        <div class="lh-1">
+                          <span class="badge bg-success mb-1">Pago</span>
+
+                          <div style="font-size: 0.75rem" class="text-muted">
+                            <i class="fas fa-calendar-check me-1"></i>
+                            <span
+                              x-text="formatarData(boleto.data_pagamento)"
+                            ></span>
+                          </div>
+
+                          <div
+                            style="font-size: 0.75rem"
+                            class="text-muted fw-bold"
+                          >
+                            <i class="fas fa-university me-1"></i>
+                            <span x-text="boleto.banco_pagamento"></span>
+                          </div>
+
+                          <template
+                            x-if="boleto.valor_total > (boleto.valor_original + 0.01)"
+                          >
+                            <div
+                              class="mt-1"
+                              style="font-size: 0.7rem; color: #6c757d"
+                            >
+                              Orig:
+                              <span
+                                class="text-decoration-line-through"
+                                x-text="formatarMoeda(boleto.valor_original)"
+                              ></span>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+                    </td>
+
+                    <td class="text-end">
+                      <button
+                        class="btn btn-sm btn-outline-primary"
+                        title="Editar"
+                        @click="editar(boleto)"
+                      >
+                        <i class="fas fa-edit"></i>
+                      </button>
+
+                      <template x-if="boleto.status === 'Pendente'">
+                        <button
+                          class="btn btn-sm btn-outline-success"
+                          title="Dar Baixa"
+                          @click="iniciarPagamento(boleto)"
+                        >
+                          <i class="fas fa-check"></i>
+                        </button>
+                      </template>
+
+                      <button
+                        class="btn btn-sm btn-outline-danger"
+                        title="Excluir"
+                        @click="excluir(boleto.id)"
+                      >
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+
+                <tr x-show="listaBoletos.length === 0">
+                  <td colspan="5" class="text-center py-4 text-muted">
+                    Nenhum boleto encontrado neste período.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            class="card-footer d-flex justify-content-between align-items-center"
+            x-show="paginacao.total_paginas > 1"
+          >
+            <small class="text-muted">
+              Página <span x-text="paginacao.atual"></span> de
+              <span x-text="paginacao.total_paginas"></span>
+            </small>
+
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+                <li
+                  class="page-item"
+                  :class="paginacao.atual === 1 ? 'disabled' : ''"
+                >
+                  <button
+                    class="page-link"
+                    @click="carregarBoletos(paginacao.atual - 1)"
+                  >
+                    Anterior
+                  </button>
+                </li>
+
+                <template x-for="p in paginacao.total_paginas">
+                  <li
+                    class="page-item"
+                    :class="p === paginacao.atual ? 'active' : ''"
+                  >
+                    <button
+                      class="page-link"
+                      @click="carregarBoletos(p)"
+                      x-text="p"
+                    ></button>
+                  </li>
+                </template>
+
+                <li
+                  class="page-item"
+                  :class="paginacao.atual === paginacao.total_paginas ? 'disabled' : ''"
+                >
+                  <button
+                    class="page-link"
+                    @click="carregarBoletos(paginacao.atual + 1)"
+                  >
+                    Próxima
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+
+        <div
+          x-show="mostrarModalPagamento"
+          style="position: relative; z-index: 2000"
+        >
+          <div
+            class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+            style="background: rgba(0, 0, 0, 0.5)"
+          >
+            <div class="card shadow p-4" style="width: 400px">
+              <h4 class="mb-3 text-success">
+                <i class="fas fa-check-circle"></i> Baixar Boleto
+              </h4>
+
+              <div class="mb-3">
+                <label class="form-label">Data do Pagamento</label>
+                <input
+                  type="date"
+                  class="form-control"
+                  x-model="pagamento.data"
+                />
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Banco / Forma de Pagamento</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  x-model="pagamento.banco"
+                  placeholder="Ex: Banestes, Dinheiro..."
+                  autofocus
+                />
+              </div>
+
+              <div class="mb-4 bg-light p-3 rounded border">
+                <div
+                  class="d-flex justify-content-between text-muted mb-1"
+                  style="font-size: 0.9em"
+                >
+                  <span>Valor Original:</span>
+                  <span x-text="formatarMoeda(pagamento.valorOriginal)"></span>
+                </div>
+
+                <label class="form-label fw-bold mt-2">Valor Pago (R$)</label>
+                <input
+                  type="text"
+                  class="form-control fw-bold text-success"
+                  x-model="pagamento.valorVisual"
+                  @input="pagamento.valorVisual = mascaraMoeda($event.target.value)"
+                />
+                <small class="text-muted" style="font-size: 0.8em"
+                  >Já inclui juros calculados.</small
+                >
+              </div>
+
+              <div class="d-flex justify-content-end gap-2">
+                <button
+                  class="btn btn-secondary"
+                  @click="mostrarModalPagamento = false"
+                >
+                  Cancelar
+                </button>
+                <button class="btn btn-success" @click="confirmarPagamento()">
+                  Confirmar Pagamento
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <script>
@@ -426,6 +1038,9 @@
           init() {
             window.addEventListener("pywebviewready", () => {
               this.carregarPerfis();
+
+              if (this.telaAtual === "inicio" || this.telaAtual === "boletos") {
+              }
             });
 
             if (window.pywebview) {
@@ -441,13 +1056,15 @@
           listaPerfis: [],
           criandoPerfil: false,
           novoUsuario: { nome: "", foto: "" },
+          modoGerenciarPerfis: false,
+          editandoPerfilId: null,
           modoParcelas: "auto",
           regraPersonalizada: "",
           novoBoleto: {
             vencimento: "",
             valor: "",
-            multa: 0,
-            juros: 0,
+            multa: "0,00",
+            juros: "0,00",
             tipoJuros: "R$",
             placa: "",
             descricao: "",
@@ -455,7 +1072,44 @@
             categoria: "",
             parcelas: 1,
           },
-          categoriasSalvas: ["Manutenção", "Combustível", "Impostos", "Peças"],
+          listaBoletos: [],
+          filtros: {
+            data_inicio: "",
+            data_fim: "",
+            status: "",
+            empresa: "",
+            placa: "",
+            categoria: "",
+            data_pagamento: "",
+          },
+          paginacao: {
+            atual: 1,
+            total_paginas: 1,
+            total_itens: 0,
+            itens_por_pagina: 30,
+          },
+          pagamento: {
+            id: null,
+            banco: "",
+            valorOriginal: "",
+            valorVisual: "",
+            data: "",
+          },
+          mostrarModalPagamento: false,
+          idEdicao: null,
+          resumo: {
+            hoje: { qtd: 0, valor: 0, inicio: "", fim: "" },
+            vencidos: { qtd: 0, valor: 0, inicio: "", fim: "" },
+            semana: { qtd: 0, valor: 0, inicio: "", fim: "" },
+            mes: { qtd: 0, valor: 0, inicio: "", fim: "" },
+          },
+          categoriasSalvas: [
+            "Manutenção",
+            "Seguro",
+            "Combustível",
+            "Impostos",
+            "Peças",
+          ],
 
           async carregarPerfis() {
             this.listaPerfis = await window.pywebview.api.listar_perfis();
@@ -465,21 +1119,70 @@
             if (!this.novoUsuario.nome) return;
 
             try {
-              const resp = await window.pywebview.api.criar_perfil(
-                this.novoUsuario,
-              );
+              let resp;
+
+              if (this.editandoPerfilId) {
+                // MODO EDIÇÃO
+                resp = await window.pywebview.api.atualizar_perfil({
+                  id: this.editandoPerfilId,
+                  nome: this.novoUsuario.nome,
+                  foto: this.novoUsuario.foto,
+                });
+              } else {
+                // MODO CRIAÇÃO
+                resp = await window.pywebview.api.criar_perfil(
+                  this.novoUsuario,
+                );
+              }
 
               if (resp.status === "sucesso") {
+                // Limpa tudo
                 this.novoUsuario = { nome: "", foto: "" };
                 this.criandoPerfil = false;
+                this.editandoPerfilId = null;
+                this.modoGerenciarPerfis = false; // Sai do modo gerenciar
                 this.carregarPerfis();
               } else {
                 alert(resp.msg);
               }
             } catch (e) {
               console.error(e);
-              alert("Erro ao criar usuário");
+              alert("Erro ao salvar perfil");
             }
+          },
+
+          prepararEdicaoPerfil(perfil) {
+            this.novoUsuario = {
+              nome: perfil.nome,
+              foto: perfil.foto,
+            };
+            this.editandoPerfilId = perfil.id;
+            this.criandoPerfil = true; // Abre o modal/form que já existe
+          },
+
+          async deletarPerfil(id) {
+            if (
+              !confirm(
+                "CUIDADO: Isso apagará o perfil e TODOS os boletos dele. Continuar?",
+              )
+            )
+              return;
+
+            const resp = await window.pywebview.api.excluir_perfil(id);
+            if (resp.status === "sucesso") {
+              this.carregarPerfis();
+              // Se não sobrar ninguém, sai do modo gerenciar
+              if (this.listaPerfis.length <= 1)
+                this.modoGerenciarPerfis = false;
+            } else {
+              alert(resp.msg);
+            }
+          },
+
+          cancelarCriacaoPerfil() {
+            this.criandoPerfil = false;
+            this.editandoPerfilId = null;
+            this.novoUsuario = { nome: "", foto: "" };
           },
 
           async entrar(id) {
@@ -487,6 +1190,9 @@
             if (resp.status === "sucesso") {
               this.usuario = resp.usuario;
               this.telaAtual = "inicio";
+
+              this.carregarResumoDashboard();
+              this.carregarBoletos(1);
             }
           },
 
@@ -536,21 +1242,326 @@
               return;
             }
 
-            const pacoteDeDados = {
-              boleto: this.novoBoleto, // Dados do formulário
-              modo: this.modoParcelas, // 'auto' ou 'custom'
-              regra: this.regraPersonalizada, // '15/30/45'
-            };
+            let boletoParaEnviar = this.novoBoleto;
+            boletoParaEnviar.valor = this.limparMoedaParaPython(
+              this.novoBoleto.valor,
+            );
+            boletoParaEnviar.juros = this.limparMoedaParaPython(
+              this.novoBoleto.juros,
+            );
+            boletoParaEnviar.multa = this.limparMoedaParaPython(
+              this.novoBoleto.multa,
+            );
 
-            const resposta =
-              await window.pywebview.api.salvar_lancamento(pacoteDeDados);
+            let resposta;
+            if (this.idEdicao) {
+              // MODO EDIÇÃO
+              resposta = await window.pywebview.api.atualizar_boleto({
+                id: this.idEdicao,
+                boleto: boletoParaEnviar,
+              });
+            } else {
+              // MODO CRIAÇÃO
+              const pacote = {
+                boleto: boletoParaEnviar,
+                modo: this.modoParcelas,
+                regra: this.regraPersonalizada,
+              };
+              resposta = await window.pywebview.api.salvar_lancamento(pacote);
+            }
 
             if (resposta.status === "sucesso") {
               alert(resposta.msg);
+              this.cancelarEdicao();
+              this.carregarBoletos(1);
               this.telaAtual = "boletos";
             } else {
               alert("Erro: " + resposta.msg);
             }
+          },
+
+          // --- FUNÇÕES DE DATA E FILTRO ---
+          aplicarFiltroDiario() {
+            const hoje = new Date().toISOString().split("T")[0];
+            this.filtros.data_inicio = hoje;
+            this.filtros.data_fim = hoje;
+            this.carregarBoletos(1);
+          },
+
+          aplicarFiltroSemanal() {
+            const hoje = new Date();
+            // Acha o domingo passado (inicio da semana) e sabado que vem
+            const primeiroDia = new Date(
+              hoje.setDate(hoje.getDate() - hoje.getDay()),
+            );
+            const ultimoDia = new Date(hoje.setDate(hoje.getDate() + 6));
+
+            this.filtros.data_inicio = primeiroDia.toISOString().split("T")[0];
+            this.filtros.data_fim = ultimoDia.toISOString().split("T")[0];
+            this.carregarBoletos(1);
+          },
+
+          aplicarFiltroMensal() {
+            const data = new Date();
+            // Primeiro dia do mês atual
+            const primeiroDia = new Date(
+              data.getFullYear(),
+              data.getMonth(),
+              1,
+            );
+            // Ultimo dia do mês atual
+            const ultimoDia = new Date(
+              data.getFullYear(),
+              data.getMonth() + 1,
+              0,
+            );
+
+            this.filtros.data_inicio = primeiroDia.toISOString().split("T")[0];
+            this.filtros.data_fim = ultimoDia.toISOString().split("T")[0];
+            this.carregarBoletos(1);
+          },
+
+          limparFiltros(recarregar = true) {
+            this.filtros = {
+              data_inicio: "",
+              data_fim: "",
+              status: "",
+              empresa: "",
+              placa: "",
+              categoria: "",
+            };
+            this.carregarBoletos(1);
+          },
+
+          // --- FUNÇÃO DE BUSCA NO PYTHON ---
+
+          async carregarBoletos(pagina) {
+            // Evita paginação inválida
+            if (
+              pagina < 1 ||
+              (pagina > this.paginacao.total_paginas &&
+                this.paginacao.total_paginas > 0)
+            )
+              return;
+
+            // Chama o Python com os filtros e a página
+            const resp = await window.pywebview.api.buscar_boletos(
+              this.filtros,
+              pagina,
+              30,
+            );
+
+            if (resp.status === "sucesso") {
+              this.listaBoletos = resp.dados;
+
+              // Atualiza dados de paginação
+              this.paginacao.atual = resp.paginacao.atual;
+              this.paginacao.total_paginas = resp.paginacao.total_paginas;
+              this.paginacao.total_itens = resp.paginacao.total_itens;
+
+              // Formata número da parcela (ex: "1/3")
+              this.listaBoletos.forEach((b) => {
+                b.parcela_formatada =
+                  b.total_parcelas > 1
+                    ? `${b.numero_parcela}/${b.total_parcelas}`
+                    : "À vista";
+              });
+            } else {
+              alert("Erro ao buscar boletos: " + resp.msg);
+            }
+          },
+
+          // --- FORMATADORES VISUAIS ---
+          formatarMoeda(valor) {
+            return Number(valor).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            });
+          },
+          formatarData(dataISO) {
+            if (!dataISO) return "";
+            const [ano, mes, dia] = dataISO.split("-");
+            return `${dia}/${mes}/${ano}`;
+          },
+          mascaraMoeda(valor) {
+            if (!valor) return "";
+
+            // Remove o que não é dígito
+            let v = valor.replace(/\D/g, "");
+
+            // Para obter os centavos
+            v = (v / 100).toFixed(2) + "";
+
+            // Troca . por ,
+            v = v.replace(".", ",");
+
+            // Adiciona o ponto dos milhares
+            v = v.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+
+            return v;
+          },
+          mascaraPlaca(valor) {
+            if (!valor) return "";
+
+            // Força maiúsculas e remove caracteres especiais
+            let v = valor.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+            // Limita a 7 caracteres (3 letras + 4 números/letras)
+            if (v.length > 7) v = v.slice(0, 7);
+
+            // Adiciona o hífen depois da terceira letra
+            if (v.length > 3) {
+              v = v.substring(0, 3) + "-" + v.substring(3);
+            }
+
+            return v;
+          },
+          limparMoedaParaPython(valorFormatado) {
+            if (!valorFormatado) return 0.0;
+            // Remove os pontos de milhar e troca vírgula por ponto
+            let limpo = valorFormatado
+              .toString()
+              .replace(/\./g, "")
+              .replace(",", ".");
+            return parseFloat(limpo);
+          },
+
+          // FUNÇÃO DE PREPARAR EDIÇÃO (Clica no lápis -> Preenche o form)
+          editar(boleto) {
+            this.idEdicao = boleto.id;
+
+            // Copia os dados para o formulário
+            this.novoBoleto = {
+              empresa: boleto.empresa,
+              categoria: boleto.categoria,
+              placa: boleto.placa,
+              descricao: boleto.descricao,
+              tipoJuros: boleto.tipo_juros || "R$",
+              // Formatações visuais (Moeda e Data) para os inputs funcionarem
+              valor: this.mascaraMoeda(boleto.valor_original.toFixed(2)),
+              juros: this.mascaraMoeda((boleto.juros || 0).toFixed(2)),
+              multa: this.mascaraMoeda((boleto.multa || 0).toFixed(2)),
+              vencimento: boleto.vencimento, // YYYY-MM-DD -> DD/MM/AAAA
+              parcelas: 1, // Em edição, ignoramos recálculo de parcelas múltiplas
+            };
+
+            // Vai para a tela de formulário
+            this.telaAtual = "boletos";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          },
+
+          // FUNÇÃO CANCELAR EDIÇÃO (Limpa tudo)
+          cancelarEdicao() {
+            this.idEdicao = null;
+            this.novoBoleto = {
+              vencimento: "",
+              valor: "",
+              multa: "",
+              juros: "",
+              tipoJuros: "R$",
+              placa: "",
+              descricao: "",
+              empresa: "",
+              categoria: "",
+              parcelas: 1,
+            };
+            this.telaAtual = "boletos";
+          },
+
+          // FUNÇÃO DE EXCLUIR
+          async excluir(id) {
+            if (!confirm("Tem certeza que deseja excluir este boleto?")) return;
+
+            const resp = await window.pywebview.api.excluir_boleto(id);
+            if (resp.status === "sucesso") {
+              // Remove visualmente da lista sem precisar recarregar tudo (opcional)
+              this.carregarBoletos(this.paginacao.atual);
+            } else {
+              alert(resp.msg);
+            }
+          },
+
+          iniciarPagamento(boleto) {
+            this.pagamento.id = boleto.id;
+            this.pagamento.banco = sessionStorage.getItem("ultimoBanco") || ""; // Começa vazio
+            // Sugere a data de hoje (YYYY-MM-DD)
+            this.pagamento.data = new Date().toISOString().split("T")[0];
+
+            let valorFinal = boleto.valor_atualizado || boleto.valor_original;
+
+            this.pagamento.valorVisual = this.mascaraMoeda(
+              valorFinal.toFixed(2),
+            );
+            this.pagamento.valorOriginal = boleto.valor_original;
+
+            this.mostrarModalPagamento = true;
+          },
+
+          // CONFIRMAR E SALVAR
+          async confirmarPagamento() {
+            if (!this.pagamento.banco) {
+              alert("Digite o nome do banco!");
+              return;
+            }
+
+            sessionStorage.setItem("ultimoBanco", this.pagamento.banco);
+            const dadosEnvio = {
+              id: this.pagamento.id,
+              banco: this.pagamento.banco,
+              data: this.pagamento.data,
+              valor: this.limparMoedaParaPython(this.pagamento.valorVisual),
+            };
+
+            const resp = await window.pywebview.api.pagar_boleto(dadosEnvio);
+
+            if (resp.status === "sucesso") {
+              alert(resp.msg);
+              this.mostrarModalPagamento = false;
+              this.carregarBoletos(this.paginacao.atual);
+            } else {
+              alert(resp.msg);
+            }
+          },
+
+          async carregarResumoDashboard() {
+            const resp = await window.pywebview.api.obter_resumo_dashboard();
+            if (resp.status === "sucesso") {
+              this.resumo = resp.dados;
+            }
+          },
+
+          // --- FUNÇÃO DE NAVEGAÇÃO INTELIGENTE ---
+          // Clica no card -> Filtra a lista -> Vai para a aba
+          irParaFiltro(tipo) {
+            // 1. Limpa filtros anteriores
+            this.limparFiltros(false); // false = não recarregar ainda
+
+            // 2. Aplica o filtro baseado no card clicado
+            this.filtros.status = "Pendente"; // Dashboard foca no que falta pagar
+
+            if (tipo === "hoje") {
+              this.filtros.data_inicio = this.resumo.hoje.inicio;
+              this.filtros.data_fim = this.resumo.hoje.fim;
+            } else if (tipo === "vencidos") {
+              // Para vencidos, pegamos tudo do passado até ontem
+              this.filtros.data_fim = this.resumo.hoje.inicio; // Lógica simplificada visual
+              // O filtro 'vencidos' idealmente seria data < hoje.
+              // Vamos usar um truque: data fim = ontem.
+              let ontem = new Date();
+              ontem.setDate(ontem.getDate() - 1);
+              this.filtros.data_fim = ontem.toISOString().split("T")[0];
+              // status já está pendente
+            } else if (tipo === "semana") {
+              this.filtros.data_inicio = this.resumo.semana.inicio;
+              this.filtros.data_fim = this.resumo.semana.fim;
+            } else if (tipo === "mes") {
+              this.filtros.data_inicio = this.resumo.mes.inicio;
+              this.filtros.data_fim = this.resumo.mes.fim;
+            }
+
+            // 3. Carrega e muda de tela
+            this.carregarBoletos(1);
+            this.telaAtual = "boletos";
           },
         };
       }
