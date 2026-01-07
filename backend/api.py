@@ -398,45 +398,100 @@ class BoletoAPI:
     def proximo_dia_util(self, data_vencimento):
         """
         Recebe um objeto date e retorna o próximo dia útil,
-        pulando Sábados, Domingos e Feriados de Nova Venécia/ES (2026).
+        pulando Sábados, Domingos e Feriados de Nova Venécia/ES.
         """
-        # Lista de Feriados 2026 - Nova Venécia/ES (Formato YYYY-MM-DD)
-        feriados = {
-            '2026-01-01', # Confraternização Universal
-            '2026-01-26', # Aniversário de Nova Venécia
-            '2026-02-16', # Carnaval
-            '2026-02-17', # Carnaval
-            '2026-02-18', # Quarta-feira de Cinzas
-            '2026-04-03', # Sexta-feira da Paixão
-            '2026-04-05', # Páscoa
-            '2026-04-13', # N. Sra. da Penha (Estadual)
-            '2026-04-21', # Tiradentes
-            '2026-04-24', # São Marcos (Municipal)
-            '2026-05-01', # Dia do Trabalho
-            '2026-05-23', # Colonização (Estadual)
-            '2026-06-04', # Corpus Christi
-            '2026-09-07', # Independência
-            '2026-10-12', # N. Sra. Aparecida
-            '2026-11-02', # Finados
-            '2026-11-15', # Proclamação da República
-            '2026-11-20', # Consciência Negra
-            '2026-12-25', # Natal
-        }
-
         dia_analise = data_vencimento
+
+        # Cache para evitar recálculo de feriados se o ano não mudar
+        ano_cache = None
+        feriados_cache = set()
 
         # Loop infinito até achar um dia útil
         while True:
+            # Se mudou de ano (ex: boleto vence 31/12), carrega feriados do próximo ano
+            if dia_analise.year != ano_cache:
+                ano_cache = dia_analise.year
+                feriados_cache = self.obter_feriados_nova_venecia(ano_cache)
+
             dia_semana = dia_analise.weekday() # 0=Seg, 5=Sab, 6=Dom
             str_data = dia_analise.strftime('%Y-%m-%d')
 
             # Se for Sábado (5), Domingo (6) OU estiver na lista de feriados
-            if dia_semana >= 5 or str_data in feriados:
+            if dia_semana >= 5 or str_data in feriados_cache:
                 # Pula para o próximo dia e repete a verificação
                 dia_analise += timedelta(days=1)
             else:
                 # É um dia útil!
                 return dia_analise
+
+    def calcular_pascoa(self, ano):
+        """ Calcula a data do Domingo de Páscoa para qualquer ano """
+        a = ano % 19
+        b = ano // 100
+        c = ano % 100
+        d = b // 4
+        e = b % 4
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i = c // 4
+        k = c % 4
+        l = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * l) // 451
+        
+        mes = (h + l - 7 * m + 114) // 31
+        dia = ((h + l - 7 * m + 114) % 31) + 1
+        
+        return date(ano, mes, dia)
+
+    # --- GERADOR DE FERIADOS DINÂMICO ---
+    def obter_feriados_nova_venecia(self, ano):
+        """ Retorna um SET com as datas dos feriados para o ano solicitado """
+        pascoa = self.calcular_pascoa(ano)
+
+        # Feriados Móveis (Baseados na Páscoa)
+        carnaval_seg = pascoa - timedelta(days=48)
+        carnaval_ter = pascoa - timedelta(days=47)
+        quarta_cinzas = pascoa - timedelta(days=46)
+        sexta_paixao = pascoa - timedelta(days=2)
+        corpus_christi = pascoa + timedelta(days=60)
+        
+        # N. Sra. da Penha (ES) - Tradicionalmente na segunda-feira, 8 dias após a Páscoa
+        nossa_sra_penha = pascoa + timedelta(days=8)
+
+        feriados_moveis = [
+            carnaval_seg, carnaval_ter, quarta_cinzas, 
+            sexta_paixao, pascoa, corpus_christi, nossa_sra_penha
+        ]
+
+        # Feriados Fixos (Nacionais, Estaduais e Municipais de Nova Venécia)
+        # Formato (Mês, Dia)
+        datas_fixas = [
+            (1, 1),   # Confraternização Universal
+            (1, 26),  # Aniversário de Nova Venécia (Municipal)
+            (4, 21),  # Tiradentes
+            (4, 24),  # São Marcos (Municipal)
+            (5, 1),   # Dia do Trabalho
+            (5, 23),  # Colonização do Solo ES (Estadual)
+            (9, 7),   # Independência
+            (10, 12), # N. Sra. Aparecida
+            (11, 2),  # Finados
+            (11, 15), # Proclamação da República
+            (11, 20), # Consciência Negra
+            (12, 25), # Natal
+        ]
+
+        lista_feriados = set()
+        
+        # Adiciona móveis formatados
+        for data in feriados_moveis:
+            lista_feriados.add(data.strftime('%Y-%m-%d'))
+
+        # Adiciona fixos formatados
+        for mes, dia in datas_fixas:
+            lista_feriados.add(date(ano, mes, dia).strftime('%Y-%m-%d'))
+
+        return lista_feriados
 
     def obter_resumo_dashboard(self):
             if not self.usuario_atual:
