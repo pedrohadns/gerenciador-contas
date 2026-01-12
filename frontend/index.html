@@ -297,7 +297,10 @@
                 class="dash-value"
                 x-text="formatarMoeda(resumo.mes.valor)"
               ></div>
-              <div class="dash-count" x-text="resumo.mes.qtd + ' conta(s)'"></div>
+              <div
+                class="dash-count"
+                x-text="resumo.mes.qtd + ' conta(s)'"
+              ></div>
             </div>
           </div>
         </div>
@@ -625,10 +628,17 @@
               <h4 class="mb-0 text-primary">
                 <i class="fas fa-list"></i> Meus Boletos
               </h4>
-              <span
-                class="badge bg-secondary"
-                x-text="paginacao.total_itens + ' encontrados'"
-              ></span>
+
+              <div class="d-flex gap-2 align-items-center">
+                <span
+                  class="badge bg-secondary"
+                  x-text="paginacao.total_itens + ' boletos'"
+                ></span>
+
+                <span class="badge bg-success fs-6">
+                  Total: <span x-text="formatarMoeda(totalVisivel)"></span>
+                </span>
+              </div>
             </div>
 
             <div class="row g-2 align-items-end">
@@ -682,15 +692,20 @@
 
               <div class="col-md-3">
                 <label class="small text-muted">Categoria</label>
-                <select
-                  class="form-select form-select-sm"
+
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
                   x-model="filtros.categoria"
-                >
-                  <option value="">Todas</option>
+                  placeholder="Digite ou escolha..."
+                  list="datalistFiltroCategorias"
+                />
+
+                <datalist id="datalistFiltroCategorias">
                   <template x-for="cat in categoriasSalvas">
-                    <option :value="cat" x-text="cat"></option>
+                    <option :value="cat"></option>
                   </template>
-                </select>
+                </datalist>
               </div>
 
               <div class="col-md-2">
@@ -874,7 +889,7 @@
                     <td class="text-end">
                       <button
                         class="btn btn-sm btn-outline-primary"
-                        title="Editar"
+                        title="Editar Dados do Boleto"
                         @click="editar(boleto)"
                       >
                         <i class="fas fa-edit"></i>
@@ -890,9 +905,19 @@
                         </button>
                       </template>
 
+                      <template x-if="boleto.status === 'Pago'">
+                        <button
+                          class="btn btn-sm btn-outline-warning text-dark"
+                          title="Editar Informações do Pagamento"
+                          @click="iniciarPagamento(boleto)"
+                        >
+                          <i class="fas fa-pen-to-square"></i>
+                        </button>
+                      </template>
+
                       <button
                         class="btn btn-sm btn-outline-danger"
-                        title="Excluir"
+                        title="Excluir Registro"
                         @click="excluir(boleto.id)"
                       >
                         <i class="fas fa-trash"></i>
@@ -971,8 +996,17 @@
             style="background: rgba(0, 0, 0, 0.5)"
           >
             <div class="card shadow p-4" style="width: 400px">
-              <h4 class="mb-3 text-success">
-                <i class="fas fa-check-circle"></i> Baixar Boleto
+              <h4
+                class="mb-3"
+                :class="pagamento.statusAtual === 'Pago' ? 'text-warning' : 'text-success'"
+              >
+                <i
+                  class="fas"
+                  :class="pagamento.statusAtual === 'Pago' ? 'fa-pen' : 'fa-check-circle'"
+                ></i>
+                <span
+                  x-text="pagamento.statusAtual === 'Pago' ? 'Editar Pagamento' : 'Baixar Boleto'"
+                ></span>
               </h4>
 
               <div class="mb-3">
@@ -1011,21 +1045,44 @@
                   x-model="pagamento.valorVisual"
                   @input="pagamento.valorVisual = mascaraMoeda($event.target.value)"
                 />
-                <small class="text-muted" style="font-size: 0.8em"
-                  >Já inclui juros calculados.</small
-                >
+                <small class="text-muted" style="font-size: 0.8em">
+                  <span x-show="pagamento.statusAtual !== 'Pago'"
+                    >Já inclui juros calculados.</span
+                  >
+                  <span x-show="pagamento.statusAtual === 'Pago'"
+                    >Valor efetivamente pago.</span
+                  >
+                </small>
               </div>
 
-              <div class="d-flex justify-content-end gap-2">
-                <button
-                  class="btn btn-secondary"
-                  @click="mostrarModalPagamento = false"
-                >
-                  Cancelar
-                </button>
-                <button class="btn btn-success" @click="confirmarPagamento()">
-                  Confirmar Pagamento
-                </button>
+              <div
+                class="d-flex justify-content-between align-items-center mt-3"
+              >
+                <div>
+                  <template x-if="pagamento.statusAtual === 'Pago'">
+                    <button
+                      class="btn btn-outline-danger btn-sm border-0"
+                      @click="estornarPagamento()"
+                      title="Cancelar pagamento e voltar para Pendente"
+                    >
+                      <i class="fas fa-undo me-1"></i> Estornar
+                    </button>
+                  </template>
+                </div>
+
+                <div class="d-flex gap-2">
+                  <button
+                    class="btn btn-secondary"
+                    @click="mostrarModalPagamento = false"
+                  >
+                    Cancelar
+                  </button>
+                  <button class="btn btn-success" @click="confirmarPagamento()">
+                    <span
+                      x-text="pagamento.statusAtual === 'Pago' ? 'Salvar Alteração' : 'Confirmar'"
+                    ></span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1106,9 +1163,11 @@
           categoriasSalvas: [
             "Manutenção",
             "Seguro",
+            "Peças",
+            "Administração",
+            "Cartão",
             "Combustível",
             "Impostos",
-            "Peças",
           ],
 
           async carregarPerfis() {
@@ -1483,18 +1542,57 @@
 
           iniciarPagamento(boleto) {
             this.pagamento.id = boleto.id;
-            this.pagamento.banco = sessionStorage.getItem("ultimoBanco") || ""; // Começa vazio
-            // Sugere a data de hoje (YYYY-MM-DD)
-            this.pagamento.data = new Date().toISOString().split("T")[0];
-
-            let valorFinal = boleto.valor_atualizado || boleto.valor_original;
-
-            this.pagamento.valorVisual = this.mascaraMoeda(
-              valorFinal.toFixed(2),
-            );
+            this.pagamento.statusAtual = boleto.status; // Importante para o Modal saber se é edição
             this.pagamento.valorOriginal = boleto.valor_original;
 
+            if (boleto.status === "Pago") {
+              // MODO EDIÇÃO: Preenche com o que já existe no banco
+              this.pagamento.banco = boleto.banco_pagamento;
+              this.pagamento.data = boleto.data_pagamento;
+
+              // Pega o valor total salvo e formata visualmente
+              this.pagamento.valorVisual = this.mascaraMoeda(
+                boleto.valor_total.toFixed(2),
+              );
+            } else {
+              // MODO PAGAMENTO NOVO: Sugere Hoje + Último Banco
+              this.pagamento.banco =
+                sessionStorage.getItem("ultimoBanco") || "";
+              this.pagamento.data = new Date().toISOString().split("T")[0];
+
+              // Sugere o valor atualizado (com juros se tiver)
+              let valorFinal = boleto.valor_atualizado || boleto.valor_original;
+              this.pagamento.valorVisual = this.mascaraMoeda(
+                valorFinal.toFixed(2),
+              );
+            }
+
             this.mostrarModalPagamento = true;
+          },
+
+          async estornarPagamento() {
+            if (
+              !confirm(
+                "Deseja cancelar a baixa deste boleto? Ele voltará a ficar PENDENTE.",
+              )
+            )
+              return;
+
+            // Chama a API
+            const resp = await window.pywebview.api.cancelar_pagamento(
+              this.pagamento.id,
+            );
+
+            if (resp.status === "sucesso") {
+              alert(resp.msg);
+              this.mostrarModalPagamento = false;
+
+              // Atualiza as listas e o dashboard
+              this.carregarBoletos(this.paginacao.atual);
+              this.carregarResumoDashboard();
+            } else {
+              alert(resp.msg);
+            }
           },
 
           // CONFIRMAR E SALVAR
@@ -1562,6 +1660,22 @@
             // 3. Carrega e muda de tela
             this.carregarBoletos(1);
             this.telaAtual = "boletos";
+          },
+
+          get totalVisivel() {
+            if (!this.listaBoletos || this.listaBoletos.length === 0) return 0;
+
+            return this.listaBoletos.reduce((acc, boleto) => {
+              let valor = 0;
+
+              if (boleto.status === "Pago") {
+                valor = boleto.valor_total || boleto.valor_original;
+              } else {
+                valor = boleto.valor_atualizado || boleto.valor_original;
+              }
+
+              return acc + parseFloat(valor);
+            }, 0);
           },
         };
       }
