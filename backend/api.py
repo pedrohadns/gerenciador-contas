@@ -252,7 +252,7 @@ class BoletoAPI:
             params.append(f"%{filtros['placa']}%")
 
         if filtros.get('categoria'):
-            sql_base += " AND categoria = ?"
+            sql_base += " AND categoria LIKE ?"
             params.append(filtros['categoria'])
 
         if filtros.get('data_pagamento'):
@@ -390,6 +390,26 @@ class BoletoAPI:
             return {'status': 'sucesso', 'msg': 'Boleto atualizado!'}
         except Exception as e:
             return {'status': 'erro', 'msg': str(e)}
+
+    def cancelar_pagamento(self, id_boleto):
+        if not self.estaLogado():
+            return {'status': 'erro', 'msg': 'Login necessário'}
+        
+        conn = get_db_connection()
+        # Volta para Pendente, apaga a data, o banco e o valor total pago
+        # Mantém o valor original e os dados do boleto intactos
+        conn.execute('''
+            UPDATE boletos 
+            SET status = 'Pendente', 
+                data_pagamento = NULL, 
+                banco_pagamento = NULL,
+                valor_total = valor_original
+            WHERE id = ? AND usuario_id = ?
+        ''', (id_boleto, self.usuario_atual['id']))
+        
+        conn.commit()
+        conn.close()
+        return {'status': 'sucesso', 'msg': 'Pagamento cancelado (Estorno realizado)'}
 
     def estaLogado(self):
         if not self.usuario_atual: return False
