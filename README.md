@@ -1,5 +1,3 @@
-# Português
-
 Sistema para gerenciamento de contas e boletos desenvolvido em Python, com interface gráfica seguindo padrão web (HTML, CSS e JS), integrada utilizando a bilioteca Pywebview. Para armazenamento dos dados, foi utilizado Sqlite.
 
 ## Funcionalidades
