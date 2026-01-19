@@ -575,3 +575,62 @@ class BoletoAPI:
                     resumo['mes']['valor'] += valor
 
             return {'status': 'sucesso', 'dados': resumo}
+
+    def gerar_relatorio_mensal(self, mes_ano):
+        """ 
+        Recebe uma string 'YYYY-MM' (ex: '2026-01') 
+        Retorna o balanço total daquele mês de referência (Vencimento).
+        """
+        if not self.estaLogado():
+            return {'status': 'erro', 'msg': 'Login necessário'}
+
+        conn = get_db_connection()
+        
+        # Filtra boletos onde o vencimento começa com 'YYYY-MM'
+        # SQLite usa strftime para pegar parte da data
+        sql = """
+            SELECT * FROM boletos 
+            WHERE usuario_id = ? AND strftime('%Y-%m', vencimento) = ?
+        """
+        boletos_db = conn.execute(sql, (self.usuario_atual['id'], mes_ano)).fetchall()
+        conn.close()
+
+        # Estrutura do Relatório
+        relatorio = {
+            'total_esperado': 0.0,    # Soma dos valores originais de tudo
+            'total_pago': 0.0,        # O que realmente saiu do bolso (valor_total)
+            'total_pendente': 0.0,    # O que falta pagar (valor_atualizado)
+            'qtd_pagos': 0,
+            'qtd_pendentes': 0,
+            'por_categoria': {}       # Ex: {'Manutenção': 500.00, 'Luz': 100.00}
+        }
+
+        for b in boletos_db:
+            boleto = dict(b)
+            
+            # 1. Soma ao Total Esperado (Planejamento)
+            relatorio['total_esperado'] += boleto['valor_original']
+
+            # 2. Verifica Status
+            if boleto['status'] == 'Pago':
+                relatorio['qtd_pagos'] += 1
+                # Se pagou, soma o valor REAL pago (com juros ou desconto)
+                relatorio['total_pago'] += boleto['valor_total']
+                
+                # Soma por Categoria (Usando valor pago)
+                cat = boleto['categoria']
+                relatorio['por_categoria'][cat] = relatorio['por_categoria'].get(cat, 0) + boleto['valor_total']
+
+            else:
+                # Se Pendente
+                relatorio['qtd_pendentes'] += 1
+                
+                # Calcula valor atualizado (reutiliza sua lógica de juros)
+                valor_atual = self.calculaValorComJuros(boleto)
+                relatorio['total_pendente'] += valor_atual
+
+                # Soma por Categoria (Usando valor atualizado)
+                cat = boleto['categoria']
+                relatorio['por_categoria'][cat] = relatorio['por_categoria'].get(cat, 0) + valor_atual
+
+        return {'status': 'sucesso', 'dados': relatorio}

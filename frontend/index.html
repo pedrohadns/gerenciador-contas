@@ -167,6 +167,13 @@
               @click.prevent="telaAtual = 'boletos'"
               ><i class="fas fa-receipt fa-fw me-2"></i>Boletos</a
             >
+            <a
+              class="nav-link active"
+              href="#"
+              @click.prevent="abrirRelatorio()"
+            >
+              <i class="fas fa-chart-pie fa-fw me-2"></i>Relatório
+            </a>
           </div>
         </div>
         <div class="d-flex align-items-center ms-auto">
@@ -1088,6 +1095,141 @@
           </div>
         </div>
       </div>
+      <div
+        x-show="mostrarModalRelatorio"
+        style="position: relative; z-index: 2000"
+      >
+        <div
+          class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+          style="background: rgba(0, 0, 0, 0.5)"
+        >
+          <div
+            class="card shadow"
+            style="width: 500px; max-height: 90vh; overflow-y: auto"
+          >
+            <div
+              class="card-header bg-primary text-white d-flex justify-content-between align-items-center"
+            >
+              <h5 class="mb-0">
+                <i class="fas fa-chart-pie"></i> Relatório Mensal
+              </h5>
+              <button
+                type="button"
+                class="btn-close btn-close-white"
+                @click="mostrarModalRelatorio = false"
+              ></button>
+            </div>
+
+            <div class="card-body">
+              <div
+                class="d-flex gap-2 mb-4 align-items-center bg-light p-2 rounded"
+              >
+                <label class="fw-bold">Mês de Referência:</label>
+                <input
+                  type="month"
+                  class="form-control w-auto"
+                  x-model="mesRelatorio"
+                  @change="gerarRelatorio()"
+                />
+              </div>
+
+              <div x-show="!dadosRelatorio" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Calculando fechamento...</p>
+              </div>
+
+              <div x-show="dadosRelatorio">
+                <div class="row text-center mb-4">
+                  <div class="col-6 border-end">
+                    <small class="text-muted">Total Pago</small>
+                    <div
+                      class="h4 text-success fw-bold"
+                      x-text="formatarMoeda(dadosRelatorio?.total_pago)"
+                    ></div>
+                    <small
+                      class="text-success"
+                      x-text="dadosRelatorio?.qtd_pagos + ' boletos'"
+                    ></small>
+                  </div>
+                  <div class="col-6">
+                    <small class="text-muted">A Pagar / Pendente</small>
+                    <div
+                      class="h4 text-danger fw-bold"
+                      x-text="formatarMoeda(dadosRelatorio?.total_pendente)"
+                    ></div>
+                    <small
+                      class="text-danger"
+                      x-text="dadosRelatorio?.qtd_pendentes + ' boletos'"
+                    ></small>
+                  </div>
+                </div>
+
+                <div class="progress mb-4" style="height: 25px">
+                  <div
+                    class="progress-bar bg-success"
+                    role="progressbar"
+                    :style="'width: ' + ((dadosRelatorio?.total_pago / (dadosRelatorio?.total_pago + dadosRelatorio?.total_pendente || 1)) * 100) + '%'"
+                  >
+                    Pago
+                  </div>
+                  <div
+                    class="progress-bar bg-danger"
+                    role="progressbar"
+                    :style="'width: ' + ((dadosRelatorio?.total_pendente / (dadosRelatorio?.total_pago + dadosRelatorio?.total_pendente || 1)) * 100) + '%'"
+                  >
+                    Pendente
+                  </div>
+                </div>
+
+                <h6 class="border-bottom pb-2 mb-3 mt-4">
+                  Gastos por Categoria
+                </h6>
+
+                <ul class="list-group list-group-flush">
+                  <template
+                    x-for="(valor, categoria) in dadosRelatorio?.por_categoria"
+                  >
+                    <li
+                      class="list-group-item d-flex justify-content-between align-items-center px-0"
+                    >
+                      <span x-text="categoria"></span>
+                      <span
+                        class="fw-bold"
+                        x-text="formatarMoeda(valor)"
+                      ></span>
+                    </li>
+                  </template>
+
+                  <li
+                    class="list-group-item text-center text-muted"
+                    x-show="Object.keys(dadosRelatorio?.por_categoria || {}).length === 0"
+                  >
+                    Nenhum lançamento neste mês.
+                  </li>
+                </ul>
+
+                <div
+                  class="alert alert-secondary mt-3 d-flex justify-content-between fw-bold mb-0"
+                >
+                  <span>TOTAL GERAL:</span>
+                  <span
+                    x-text="formatarMoeda((dadosRelatorio?.total_pago || 0) + (dadosRelatorio?.total_pendente || 0))"
+                  ></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-footer text-end">
+              <button
+                class="btn btn-secondary"
+                @click="mostrarModalRelatorio = false"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <script>
       function appBoletos() {
@@ -1160,6 +1302,9 @@
             semana: { qtd: 0, valor: 0, inicio: "", fim: "" },
             mes: { qtd: 0, valor: 0, inicio: "", fim: "" },
           },
+          mostrarModalRelatorio: false,
+          mesRelatorio: new Date().toISOString().slice(0, 7),
+          dadosRelatorio: null,
           categoriasSalvas: [
             "Manutenção",
             "Seguro",
@@ -1676,6 +1821,29 @@
 
               return acc + parseFloat(valor);
             }, 0);
+          },
+
+          async gerarRelatorio() {
+            if (!this.mesRelatorio) return;
+
+            // Zera anterior
+            this.dadosRelatorio = null;
+
+            const resp = await window.pywebview.api.gerar_relatorio_mensal(
+              this.mesRelatorio,
+            );
+
+            if (resp.status === "sucesso") {
+              this.dadosRelatorio = resp.dados;
+            } else {
+              alert(resp.msg);
+            }
+          },
+
+          // Função auxiliar para abrir o modal
+          abrirRelatorio() {
+            this.mostrarModalRelatorio = true;
+            this.gerarRelatorio(); // Já carrega o mês atual ao abrir
           },
         };
       }
