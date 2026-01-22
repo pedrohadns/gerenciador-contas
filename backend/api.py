@@ -231,13 +231,39 @@ class BoletoAPI:
         # 1. Construção Dinâmica do SQL
         sql_base = " FROM boletos WHERE usuario_id = ?"
 
-        if filtros.get('data_inicio'):
-            sql_base += " AND vencimento >= ?"
-            params.append(filtros['data_inicio'])
-        
-        if filtros.get('data_fim'):
-            sql_base += " AND vencimento <= ?"
-            params.append(filtros['data_fim'])
+        dt_ini = filtros.get('data_inicio')
+        dt_fim = filtros.get('data_fim')
+        criterio_data = ""
+        params_data = []
+
+        if dt_ini and dt_fim:
+            criterio_data = "vencimento BETWEEN ? AND ?"
+            params_data = [dt_ini, dt_fim]
+        elif dt_ini:
+            criterio_data = "vencimento >= ?" # A partir de...
+            params_data = [dt_ini]
+        elif dt_fim:
+            criterio_data = "vencimento <= ?" # Até...
+            params_data = [dt_fim]
+
+        if criterio_data:
+            if filtros.get('incluir_vencidos'):
+                hoje_str = date.today().strftime('%Y-%m-%d')
+                
+                # Lógica: (Critério escolhido) OU (Pendente e Atrasado)
+                sql_base += f""" 
+                    AND (
+                        ({criterio_data}) 
+                        OR 
+                        (status = 'Pendente' AND vencimento < ?)
+                    )
+                """
+                params.extend(params_data)
+                params.append(hoje_str)
+            else:
+                # Lógica Estrita (Só o critério)
+                sql_base += f" AND ({criterio_data})"
+                params.extend(params_data)
 
         if filtros.get('status'):
             sql_base += " AND status = ?"
