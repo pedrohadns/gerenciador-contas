@@ -700,21 +700,56 @@
               </div>
 
               <div class="col-md-3">
-                <label class="small text-muted">Categoria</label>
+                <label class="small text-muted">Categoria(s)</label>
 
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  x-model="filtros.categoria"
-                  placeholder="Digite ou escolha..."
-                  list="datalistFiltroCategorias"
-                />
+                <div class="dropdown">
+                  <button
+                    class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                  >
+                    <span
+                      x-text="filtros.categoria.length === 0 ? 'Todas' : filtros.categoria.length + ' selecionada(s)'"
+                    ></span>
+                  </button>
 
-                <datalist id="datalistFiltroCategorias">
-                  <template x-for="cat in categoriasSalvas">
-                    <option :value="cat"></option>
-                  </template>
-                </datalist>
+                  <ul
+                    class="dropdown-menu w-100 p-2 shadow"
+                    style="max-height: 250px; overflow-y: auto"
+                  >
+                    <li><h6 class="dropdown-header">Selecione:</h6></li>
+
+                    <template x-for="cat in opcoesCategorias" :key="cat">
+                      <li class="dropdown-item p-0">
+                        <div class="form-check p-2 m-0 hover-bg-light">
+                          <input
+                            class="form-check-input ms-1"
+                            type="checkbox"
+                            :value="cat"
+                            :id="'check_' + cat"
+                            x-model="filtros.categoria"
+                          />
+
+                          <label
+                            class="form-check-label w-100 ps-2"
+                            :for="'check_' + cat"
+                            style="cursor: pointer"
+                            x-text="cat"
+                          >
+                          </label>
+                        </div>
+                      </li>
+                    </template>
+
+                    <li
+                      x-show="opcoesCategorias.length === 0"
+                      class="text-center text-muted small py-2"
+                    >
+                      Nenhuma categoria encontrada.
+                    </li>
+                  </ul>
+                </div>
               </div>
 
               <div class="col-md-2">
@@ -1280,15 +1315,16 @@
             status: "",
             empresa: "",
             placa: "",
-            categoria: "",
+            categoria: [],
             data_pagamento: "",
             incluir_vencidos: false,
           },
+          opcoesCategorias: [],
           paginacao: {
             atual: 1,
             total_paginas: 1,
             total_itens: 0,
-            itens_por_pagina: 30,
+            itens_por_pagina: 50,
           },
           pagamento: {
             id: null,
@@ -1320,6 +1356,11 @@
 
           async carregarPerfis() {
             this.listaPerfis = await window.pywebview.api.listar_perfis();
+          },
+
+          async carregarOpcoesCategorias() {
+            const cats = await window.pywebview.api.obter_categorias_usadas();
+            this.opcoesCategorias = cats;
           },
 
           async criarUsuario() {
@@ -1399,6 +1440,7 @@
               this.telaAtual = "inicio";
 
               this.carregarResumoDashboard();
+              this.carregarOpcoesCategorias();
               this.carregarBoletos(1);
             }
           },
@@ -1545,7 +1587,7 @@
               status: "",
               empresa: "",
               placa: "",
-              categoria: "",
+              categoria: [],
               incluir_vencidos: false,
             };
             this.carregarBoletos(1);
@@ -1566,7 +1608,7 @@
             const resp = await window.pywebview.api.buscar_boletos(
               this.filtros,
               pagina,
-              30,
+              50,
             );
 
             if (resp.status === "sucesso") {

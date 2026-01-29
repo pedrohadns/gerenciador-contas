@@ -277,9 +277,20 @@ class BoletoAPI:
             sql_base += " AND placa LIKE ?" # LIKE permite buscar parcial
             params.append(f"%{filtros['placa']}%")
 
-        if filtros.get('categoria'):
-            sql_base += " AND categoria LIKE ?"
-            params.append(filtros['categoria'])
+        cats = filtros.get('categoria')
+        
+        if cats:
+            # Se for uma lista com itens (Ex: ['Combustível', 'Peças'])
+            if isinstance(cats, list) and len(cats) > 0:
+                # Cria placeholders dinâmicos (?, ?, ?)
+                placeholders = ','.join(['?'] * len(cats))
+                sql_base += f" AND categoria IN ({placeholders})"
+                params.extend(cats)
+            
+            # Se for string (caso legado ou busca simples), mantém o LIKE
+            elif isinstance(cats, str) and cats.strip():
+                sql_base += " AND categoria LIKE ?"
+                params.append(f"%{cats}%")
 
         if filtros.get('data_pagamento'):
             sql_base += " AND data_pagamento = ?"
@@ -601,6 +612,19 @@ class BoletoAPI:
                     resumo['mes']['valor'] += valor
 
             return {'status': 'sucesso', 'dados': resumo}
+
+    def obter_categorias_usadas(self):
+        if not self.usuario_atual:
+            return []
+        
+        conn = get_db_connection()
+        # Busca todas as categorias distintas, ordena alfabeticamente e remove vazias
+        sql = "SELECT DISTINCT categoria FROM boletos WHERE usuario_id = ? AND categoria <> '' ORDER BY categoria ASC"
+        rows = conn.execute(sql, (self.usuario_atual['id'],)).fetchall()
+        conn.close()
+        
+        # Retorna uma lista simplebs de strings: ['Combustível', 'Manutenção', 'Peças']
+        return [r[0] for r in rows]
 
     def gerar_relatorio_mensal(self, mes_ano):
         """ 
